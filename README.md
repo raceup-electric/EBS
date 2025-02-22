@@ -6,7 +6,7 @@ La scheda dell'*Emergency Brake System* gestisce la parte terminale dell'*Autono
 - attuare i freni idraulici in modalità *driverless*
 - monitorare la pressione dei serbatoi di aria compressa utilizzati per l'attivazione dei freni
 
-## Indice
+## Indice <a id="indice"></a>
 
 - [Introduzione](#introduzione)
 - [Attuazione freni idraulici](#attuazione-freni-idraulici)
@@ -33,7 +33,7 @@ Si distinguono due casi:
 
 ## Monitoraggio pressione
 
-La scheda legge i valori inviati dai due sensori di pressione posizionati nei serbatoi tramite due pin analogici. I valori vengono filtrati tramite *moving average* (buffer di venti valori<sup>1</sup>), convertiti in pressione e inviati periodicamente (ogni 100 ms<sup>1</sup>) in CAN mediante il messaggio `EbsTank`<sup>2</sup>. Quest'ultimo include anche informazioni sulla salute dei sensori e segnala se la pressione dei serbatoi è inferiore al *threshold*<sup>3</sup>.
+La scheda legge i valori inviati dai due sensori di pressione posizionati nei serbatoi tramite due pin analogici. I valori vengono filtrati tramite *moving average* (buffer di venti valori[<sup>1</sup>](#nota1)), convertiti in pressione e inviati periodicamente (ogni 100 ms[<sup>1</sup>](#nota1)) in CAN mediante il messaggio `EbsTank`[<sup>2</sup>](#nota2). Quest'ultimo include anche informazioni sulla salute dei sensori e segnala se la pressione dei serbatoi è inferiore al *threshold*[<sup>3</sup>](#nota3).
 
 ## Quando usa Autonomous Brake?
 
@@ -45,10 +45,17 @@ Quando la scheda riceve il messaggio `ESBCheck` dalla centralina, abbassa i due 
 
 ### Fine Run
 
-Alla ricezione del messaggio `EndRun`<sup>3</sup>, si procede all'attivazione dei freni.
+Alla ricezione del messaggio `EndRun`[<sup>3</sup>](#nota3), si procede all'attivazione dei freni.
 
 ---
 
-<sup>1</sup> - Questi valori possono variare.  
-<sup>2</sup> - Nome da verificare, potrebbe subire modifiche. Il messaggio contiene valori di pressione da 5 a 10, con una sensibilità di 0.125 espressa in Bar; 6 Bar rappresentano il threshold.  
-<sup>3</sup> - Messaggio non ancora incluso nel file DBC.
+## Note
+
+<a id="nota1"></a>
+[<sup>1</sup>] - Questi valori possono variare. [Torna all'indice](#indice)
+
+<a id="nota2"></a>
+[<sup>2</sup>] - Nome da verificare, potrebbe subire modifiche. Il messaggio contiene valori di pressione da 5 a 10, con una sensibilità di 0.125 espressa in Bar; 6 Bar rappresentano il threshold. [Torna all'indice](#indice)
+
+<a id="nota3"></a>
+[<sup>3</sup>] - Messaggio non ancora incluso nel file DBC. [Torna all'indice](#indice)
