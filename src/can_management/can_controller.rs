@@ -128,4 +128,14 @@ impl<'a> CanController<'a>{
             }
         }
     }
+
+    pub async fn write_message(&mut self, message: &Messages) -> Result<(), CanError> {
+        let frame = message_to_canframe(message);
+        self.write(&frame).await
+    }
+    
+    pub async fn read_message(&mut self) -> Result<Messages, CanError> {
+        let frame = self.read().await?;
+    }
+    
 }

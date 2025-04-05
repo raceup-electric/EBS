@@ -9,6 +9,7 @@ use crate::pressure::utils::*;
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
 use super::super::can_management;
 use can_management::can_controller::CanController;
+use can_managemente::messagges::TankEbs;
 
 
 
@@ -36,7 +37,7 @@ impl BrakePressureSensor {
 }
 
 #[embassy_executor::task]
-pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor, can: &'static Mutex<CriticalSectionRawMutex, CanController<'static>>) {
+pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor) {
     loop {
         for _ in 0..N_NEW_SAMPLES {
             let val1 = sensor.sensor1.read();
@@ -50,15 +51,12 @@ pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor, ca
         let voltage1 = adc_to_voltage(sensor.buffer1.avg());
         let voltage2 = adc_to_voltage(sensor.buffer2.avg());
 
-        info!("Left voltage = {}, Right voltage = {}", voltage1, voltage2);
-
         let pressure1 = voltage_to_pressure(voltage1);
         let pressure2 = voltage_to_pressure(voltage2);
 
-        info!("Left Brake pressure = {}, Right Brake pressure = {}", pressure1, pressure2);
-
-        let mut can_data = can.lock().await;
-        can_operation(&mut can_data, voltage1 as u16, voltage2 as u16);
+        let pressure_msg = pressure_to_can_msg((pressure1, pressure2));
+        //let mut can_data = can.lock().await;
+        //can_operation(&mut can_data, sensor.buffer1.avg() as u16, sensor.buffer2.avg() as u16).await;
 
 
         //parsing
@@ -66,4 +64,8 @@ pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor, ca
         Timer::after_millis(200).await;
 
     }
+}
+
+fn pressure_to_can_msg(pressure: (f32, f32)) -> TankEbs{
+    TankEbs::new(brake_pressure_is_critical(pressure), pressure.1, pressure.2, True, True)
 }

@@ -66,3 +66,18 @@ impl CanFrame {
         self.len
     }
 }
+
+pub fn canframe_to_message(frame: &CanFrame) -> Result<Messages, CanError> {
+    Messages::from_can_message(frame.id() as u32, &frame._bytes())
+}
+pub fn message_to_canframe(message: &Messages) -> CanFrame {
+    let id = match message {
+        Messages::TanksEbs(_) => TanksEbs::MESSAGE_ID,
+        Messages::PcuFault(_) => PcuFault::MESSAGE_ID,
+        Messages::Paddle(_) => Paddle::MESSAGE_ID,
+        // Aggiungi altri messaggi qui...
+        _ => 0, // Valore placeholder, se serve gestire errori metti un `panic!`
+    };
+
+    CanFrame::new(id as u16, message.raw())
+}

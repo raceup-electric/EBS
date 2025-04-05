@@ -1,5 +1,8 @@
 pub mod frame;
 pub mod can_controller;
+pub mod messages;
+pub mod can;
+pub mod can_service;
 
 pub use can_controller::CanError;
 use defmt::info;
