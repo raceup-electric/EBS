@@ -92,6 +92,37 @@ $$ pi_f = k_f \cdot  pp $$
 $$ pi_r = k_r \cdot  pp $$
 
 
+---
+
+``` mermaid
+flowchart TD
+	A(Start) -.-> |select DV Mission| B((PHASE 1))
+    B --> C[tank pressure validation]
+    C --> D[consistency brake check]
+    D --> E[/send system status/]
+    E --> C
+    E -.-> |ASB check request| F((PHASE 2))
+    F --> G[ASB check]
+    G --> H[/send result validation/]
+    
+    H -.-> |ASB check ack| I((PHASE 3))
+    I --> J[tank pressure validation]
+    J --> K[/send sys status/]
+    K -.-> |R2D| L((PHASE 4))
+    L -.-> |RES GO| M[disengage brake]
+    M --> N((PHASE 5))
+
+    N -.-> |brake request| U{Is speed low enough?}
+    U --> |yes| P[engage brake]
+    P --> Q{brake request still on?}
+    Q -->|yes| Q
+    Q -->|no| R[disengage brake]
+    Z -.-> |mission none| T(END)
+
+    N --> O[continuous monitoring tank pressure]
+    O --> Z[/send tank status/]
+    Z --> O
+```
 
 ---
 
