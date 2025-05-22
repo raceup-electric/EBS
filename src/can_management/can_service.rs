@@ -1,3 +1,7 @@
+use embassy_executor::task;
+use embassy_sync::mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use static_cell::StaticCell;
 pub struct CanPeripherals {
     pub can2: CAN2,
     pub pb12: PB12,
@@ -48,16 +52,20 @@ pub async fn can_sender() {
     }
 }
 
-use embassy_executor::task;
-use embassy_sync::mutex::Mutex;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use static_cell::StaticCell;
-
 #[task]
 pub async fn can_reader() {
     let can = CAN.get().unwrap();
     loop {
 
+    }
+}#[embassy_executor::task]
+async fn write_can(mut tx: CanTx<'static>) {
+    loop {
+        let (id, mes) = CAN_WRITER.receive().await;
+        let message = embassy_stm32::can::Frame::new_standard(id, &mes);
+        if let Ok(some) = message {
+            tx.write(&some).await;
+        }
     }
 }
 
@@ -74,3 +82,5 @@ pub async fn asb_check() {
     
     release_brake();
 }
+
+

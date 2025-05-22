@@ -75,8 +75,7 @@ pub fn message_to_canframe(message: &Messages) -> CanFrame {
         Messages::TanksEbs(_) => TanksEbs::MESSAGE_ID,
         Messages::PcuFault(_) => PcuFault::MESSAGE_ID,
         Messages::Paddle(_) => Paddle::MESSAGE_ID,
-        // Aggiungi altri messaggi qui...
-        _ => 0, // Valore placeholder, se serve gestire errori metti un `panic!`
+        _ => 0,
     };
 
     CanFrame::new(id as u16, message.raw())

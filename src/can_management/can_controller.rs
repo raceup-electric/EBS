@@ -48,7 +48,7 @@ impl<'a> CanController<'a>{
         controller.can.enable().await;
         controller
     }
-
+    
     pub async fn _new_can1(peri: CAN1, rx: PA11, tx: PA12, baudrate: u32) -> Self {
         let controller = CanController {
             can: Can::new(

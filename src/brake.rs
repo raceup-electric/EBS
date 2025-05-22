@@ -1,39 +1,57 @@
 use embassy_stm32::gpio::{Output, Level, Speed};
 use embassy_stm32::peripherals::{PC6, PC7};
-
+use embassy_stm32::Peri;
 pub enum BrakeSignal {
     Engage,
     Release,
-    CheckStatus,
+    TankOneCheck,
+    TankTwoCheck
 }
 
 #[derive(defmt::Format)]
+#[derive(PartialEq)]
 pub enum BrakeStatus {
     Engaged,
-    Released,
-    NotSet,
+    Released
 }
 
+pub enum Tank {
+    One,
+    Two
+}
 pub struct BrakeController {
     pin1: Output<'static>,
     pin2: Output<'static>,
+    last_tank_utilized: Tank,
     status: BrakeStatus,
 }
 
 impl BrakeController {
-    pub fn new(pin1: PC6, pin2: PC7) -> Self {
+    pub fn new(pin1: Peri<'static,PC6>, pin2: Peri<'static,PC7>) -> Self {
         Self {
             pin1: Output::new(pin1, Level::High, Speed::Low),
             pin2: Output::new(pin2, Level::High, Speed::Low),
-            status: BrakeStatus::NotSet,
+            last_tank_utilized : Tank::One,
+            status: BrakeStatus::Released,
         }
     }
 
     pub fn engage(&mut self) {
-        self.pin1.set_low();
-        self.pin2.set_low();
-        self.status = BrakeStatus::Engaged;
-        defmt::info!("Freno ENGAGED");
+        if self.status == BrakeStatus::Released {
+            match self.last_tank_utilized {
+                Tank::One => { //now brake realising second tank
+                    self.pin1.set_high();
+                    self.pin2.set_low();
+                    self.last_tank_utilized = Tank::Two;
+                }
+                Tank::Two => { //now brake realising first tank
+                    self.pin1.set_low();
+                    self.pin2.set_high();
+                    self.last_tank_utilized = Tank::One;
+                }    
+            }
+            self.status = BrakeStatus::Engaged;
+        }
     }
 
     pub fn release(&mut self) {
@@ -43,12 +61,28 @@ impl BrakeController {
         defmt::info!("Freno RELEASED");
     }
 
-    pub fn check_status(&self) -> &BrakeStatus {
-        defmt::info!("Stato attuale del freno: {:?}", &self.status);
-        &self.status
-    }
-
     pub fn set_status(&mut self, status: BrakeStatus) {
         self.status = status;
+    }
+
+    pub fn handle_signal(&mut self, signal: BrakeSignal) {
+        match signal {
+            BrakeSignal::Engage => self.engage(),
+            BrakeSignal::Release => self.release(),
+
+            BrakeSignal::TankOneCheck => {
+                self.pin1.set_low();
+                self.pin2.set_high();
+                self.last_tank_utilized = Tank::One;
+                defmt::info!("Tank ONE check (pin1 LOW, pin2 HIGH)");
+            }
+
+            BrakeSignal::TankTwoCheck => {
+                self.pin1.set_high();
+                self.pin2.set_low();
+                self.last_tank_utilized = Tank::Two;
+                defmt::info!("Tank TWO check (pin1 HIGH, pin2 LOW)");
+            }
+        }
     }
 }
