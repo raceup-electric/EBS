@@ -91,7 +91,6 @@ La *funzione di trasferimento* traduce la proporzionalità diretta tra *pression
 $$ pi_f = k_f \cdot  pp $$
 $$ pi_r = k_r \cdot  pp $$
 
-
 ---
 
 ``` mermaid
@@ -123,7 +122,6 @@ flowchart TD
     O --> Z[/send tank status/]
     Z --> O
 ```
-
 ---
 
 ## Note
