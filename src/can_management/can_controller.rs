@@ -1,13 +1,13 @@
-pub use super::CanFrame;
-
 use embassy_stm32::bind_interrupts;
 use embassy_stm32::can::filter::Mask32;
 use embassy_stm32::can::{
     Can, Fifo, Rx0InterruptHandler, Rx1InterruptHandler, SceInterruptHandler, TxInterruptHandler
 };
 
-use embassy_stm32::peripherals::{CAN1, CAN2, PA11, PA12, PB12, PB13};
-use embassy_time::Duration;
+use embassy_stm32::{
+    peripherals::{ CAN1, CAN2, PA11, PA12, PB12, PB13},
+    Peri
+};
 
 bind_interrupts!(struct Irqs1 {
     CAN1_RX0 => Rx0InterruptHandler<CAN1>;
@@ -23,33 +23,24 @@ bind_interrupts!(struct Irqs2 {
     CAN2_TX => TxInterruptHandler<CAN2>;
 });
 
-
-#[derive(Debug)]
-pub enum CanError {
-    NoItem,
-    Timeout,
-    WriteError,
-}
-
 pub struct CanController<'a> {
-    can: Can<'a>,
-    tx_frame: Option<CanFrame>,
-    is_can2: bool
+    pub can: Can<'a>,
+    pub is_can2: bool
 }
 
 
 impl<'a> CanController<'a>{
     async fn new(mut controller: CanController<'a>, baudrate: u32) -> Self {
         controller.can.modify_config()
-            .set_loopback(true) // Receive own frames
+            .set_loopback(false) // Receive own frames
             .set_bitrate(baudrate);
         
         if !controller.is_can2 {controller.can.modify_filters().enable_bank(0, Fifo::Fifo0, Mask32::accept_all());}
         controller.can.enable().await;
         controller
     }
-    
-    pub async fn _new_can1(peri: CAN1, rx: PA11, tx: PA12, baudrate: u32) -> Self {
+
+    pub async fn _new_can1(peri: Peri<'static, CAN1> , rx: Peri<'static, PA11>, tx: Peri<'static, PA12>, baudrate: u32) -> Self {
         let controller = CanController {
             can: Can::new(
                 peri,
@@ -57,18 +48,16 @@ impl<'a> CanController<'a>{
                 tx,
                 Irqs1
             ),
-            tx_frame: None,
             is_can2: false
         };
         Self::new(controller, baudrate).await
     }
 
-    pub async fn new_can2(peri: CAN2, rx: PB12, tx: PB13, baudrate: u32, peri1: CAN1, rx1: PA11, tx1: PA12) -> Self {
+    pub async fn new_can2(peri: Peri<'static, CAN2>, rx: Peri<'static, PB12>, tx: Peri< 'static, PB13>, baudrate: u32, peri1: Peri<'static, CAN1>, rx1: Peri<'static, PA11>, tx1: Peri<'static, PA12> ) -> Self {
         let mut can1 = Can::new(peri1, rx1, tx1, Irqs1);
  
         let controller = CanController {
             can: Can::new(peri, rx, tx, Irqs2),
-            tx_frame: None,
             is_can2: true
         };
 
@@ -77,65 +66,7 @@ impl<'a> CanController<'a>{
         can1.sleep().await;
         drop(can1);
 
-        Self::new(controller, baudrate).await        
+        Self::new(controller, baudrate).await
     }
 
-    pub async fn write(&mut self, frame: &CanFrame) -> Result<(), CanError> {
-        let mut attempts: u8 = 0;
-
-        while (self.tx_frame.is_some()) && (attempts < 5) {
-            embassy_time::Timer::after(Duration::from_millis(10)).await;
-            attempts = attempts.wrapping_add(1);
-        }
-
-        if attempts >= 5 {
-            return Err(CanError::Timeout)
-        }
-
-        let new_frame = frame.clone();
-
-        self.tx_frame = Some(new_frame);
-
-        attempts = 0;
-
-        while attempts < 4 {
-            if let Some(ref tx_frame) = self.tx_frame {
-                match self.can.try_write(&tx_frame.frame()) {
-                    Ok(_) => {
-                        self.tx_frame = None;
-                        return Ok(())
-                    }
-                    Err(_) => {
-                        attempts = attempts.wrapping_add(1);
-                    }
-                }
-            }
-        }
-        self.tx_frame = None;
-        Err(CanError::WriteError)
-    } 
-
-    pub async fn read(&mut self) -> Result<CanFrame, CanError> {
-        let envelope = self.can.try_read();
-        match envelope {
-            Ok(_) => {
-                let frame = CanFrame::from_envelope(envelope.unwrap());
-                return Ok(frame);        
-            }
-
-            Err(_) => {
-                return Err(CanError::NoItem);
-            }
-        }
-    }
-
-    pub async fn write_message(&mut self, message: &Messages) -> Result<(), CanError> {
-        let frame = message_to_canframe(message);
-        self.write(&frame).await
-    }
-    
-    pub async fn read_message(&mut self) -> Result<Messages, CanError> {
-        let frame = self.read().await?;
-    }
-    
 }

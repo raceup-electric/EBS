@@ -1,4 +1,4 @@
-pub const BUFFER_SIZE: usize = 20;
+pub const BUFFER_SIZE: usize = 10;
 
 /// Buffer circolare per filtrare dati adc con Moving Average
 pub struct FilterBuffer {

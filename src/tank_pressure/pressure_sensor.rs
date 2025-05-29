@@ -4,24 +4,24 @@ use crate::tank_pressure::filter_buffer::FilterBuffer;
 use crate::tank_pressure::utils::*;
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
 use super::super::can_management;
-use can_management::can_controller::CanController;
-use can_management::messages::TankEbs;
 use embassy_stm32::Peri;
+use crate::TANK_STATUS;
+use crate::TankStatus;  
 
 
 
 
 
-pub const N_NEW_SAMPLES: usize = 5;
+pub const N_NEW_SAMPLES: usize = 10;
 
-pub struct BrakePressureSensor {
+pub struct TankPressureSensor {
     sensor1: Sensor<ADC1, Peri<'static, PA1>>,
     sensor2: Sensor<ADC2, Peri<'static, PA2>>,
     buffer1: FilterBuffer,
     buffer2: FilterBuffer,
 }
 
-impl BrakePressureSensor {
+impl TankPressureSensor {
     pub fn new(sensor1: Sensor<ADC1, Peri<'static, PA1>>, sensor2: Sensor<ADC2, Peri<'static,  PA2>>) -> Self {
         Self {
             sensor1,
@@ -34,7 +34,7 @@ impl BrakePressureSensor {
 }
 
 #[embassy_executor::task]
-pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor) {
+pub async fn tank_pressure_monitor(sensor: &'static mut TankPressureSensor) {
     loop {
         for _ in 0..N_NEW_SAMPLES {
             let val1 = sensor.sensor1.read();
@@ -51,18 +51,20 @@ pub async fn brake_pressure_monitor(sensor: &'static mut BrakePressureSensor) {
         let pressure1 = voltage_to_pressure(voltage1);
         let pressure2 = voltage_to_pressure(voltage2);
 
-        let pressure_msg = pressure_to_can_msg((pressure1, pressure2));
-        //let mut can_data = can.lock().await;
-        //can_operation(&mut can_data, sensor.buffer1.avg() as u16, sensor.buffer2.avg() as u16).await;
+        let sensor1_check = true; //TODO, check per i sensori in base ai valori nel
+        let sensor2_check = true;
 
-
-        //parsing
-        //invia nel channel can il frame
+        TANK_STATUS.signal(
+            TankStatus::new(
+                pressure1,
+                pressure2,
+                sensor1_check,
+                sensor2_check,
+            )
+        );
         Timer::after_millis(200).await;
 
-    }
-}
+        
 
-fn pressure_to_can_msg(pressure: (f32, f32)) -> TankEbs{
-    TankEbs::new(brake_pressure_is_critical(pressure), pressure.1, pressure.2, true, true)
+    }
 }

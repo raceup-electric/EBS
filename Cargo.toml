@@ -1,5 +1,5 @@
 [package]
-name = "pcu_rust"
+name = "EBS"
 version = "0.1.0"
 edition = "2021"
 
@@ -39,7 +39,7 @@ panic-probe = { version = "1.0.0", features = ["defmt"] }
 
 
 [[bin]]
-name = "pcu_rust"
+name = "ebs"
 path = "src/main.rs"
 test = false
 doctest = false

@@ -17,6 +17,9 @@ use panic_probe as _;
 use defmt_rtt as _;
 use embassy_sync::channel::Channel;
 use embassy_time::Duration;
+use embassy_stm32::can::{CanTx, CanRx};
+use crate::can_management::CanFrame;
+use crate::can_management::messages::Messages;
 
 mod tank_pressure;
 mod brake;
@@ -24,28 +27,25 @@ mod can_management;
 mod config;
 
 use can_management::can_controller::CanController;
-use can_management:init_can_service;
 
 use tank_pressure::sensor::Sensor;
-use tank_pressure::pressure_sensor::{BrakePressureSensor, brake_pressure_monitor};
+use tank_pressure::pressure_sensor::{TankPressureSensor, tank_pressure_monitor};
 use brake::{BrakeSignal, BrakeStatus};
 use config::pressure_thresholds::*;
-use core::sync::atomic::AtomicU8;
 
-static BRAKE_PRESSURE_SENSOR: StaticCell<BrakePressureSensor> = StaticCell::new();
+static TANK_PRESSURE_SENSOR: StaticCell<TankPressureSensor> = StaticCell::new();
 static BRAKE_CONTROLLER: StaticCell<BrakeController> = StaticCell::new();
+static CAN: StaticCell<CanController> = StaticCell::new();
 
 static BRAKE_SIGNAL: Signal<CriticalSectionRawMutex, brake::BrakeSignal> = Signal::new();
 
-static CAN_MSG_CHANNEL: Channel<CriticalSectionRawMutex, Messages, 10> = Channel::new();
-
-static CAN: StaticCell<Mutex<CriticalSectionRawMutex, CanController>> = StaticCell::new();
+static CAN_WRITER: Channel<CriticalSectionRawMutex, (u16, [u8; 8]), 20> = Channel::new();
 
 
 // Signal to update status
 
 static MISSION : Signal<CriticalSectionRawMutex, Mission> = Signal::new();
-static TANK_STATUS : Signal<CriticalSectionRawMutex, TankStatus> = Signal::new();
+pub static TANK_STATUS : Signal<CriticalSectionRawMutex, TankStatus> = Signal::new();
 static SPEED : Signal<CriticalSectionRawMutex, f32> = Signal::new();
 static BRAKE_PRESSURE : Signal<CriticalSectionRawMutex, (f32, f32)> = Signal::new();
 static ERROR : Signal<CriticalSectionRawMutex, bool> = Signal::new();
@@ -56,21 +56,23 @@ static GO : Signal<CriticalSectionRawMutex, ()> = Signal::new();
 async fn main(spawner: Spawner) {
     let p = embassy_stm32::init(Default::default());
 
-    let brake_pressure_sensor = BRAKE_PRESSURE_SENSOR.init (BrakePressureSensor::new(
+    let tank_pressure_sensor = TANK_PRESSURE_SENSOR.init (TankPressureSensor::new(
         Sensor::new(Adc::new(p.ADC1), p.PA1),
         Sensor::new(Adc::new(p.ADC2), p.PA2),
     ));
-    spawner.spawn(brake_pressure_monitor(brake_pressure_sensor)).unwrap();
+    spawner.spawn(tank_pressure_monitor(tank_pressure_sensor)).unwrap();
     
     let brake_controller = BRAKE_CONTROLLER.init(BrakeController::new(p.PC6,p.PC7));
-    spawner.spawn(brake_control_task(brake_controller));
+    spawner.spawn(brake_control_task(brake_controller)).unwrap();
     
 
-    let can_peripherals = init_can_peripherals(&mut p);    
-    init_can_service(&spawner, can_peripherals).await;
+    let mut can = CanController::new_can2(p.CAN2, p.PB12, p.PB13, 500_000, p.CAN1, p.PA11, p.PA12).await;
+    let (can_tx, can_rx) = can.can.split();
 
-    let car_status = CarStatus::new();
-    let ebs_status = EbsStatus::new();
+    spawner.spawn(can_writer(can_tx)).unwrap();
+
+    let mut car_status = CarStatus::new();
+    let mut ebs_status = EbsStatus::new();
     
     loop{
         car_status.update();
@@ -120,7 +122,7 @@ async fn main(spawner: Spawner) {
                 
             }
             Phase::Four  => {
-                GO.wait.await();
+                GO.wait().await;
                 BRAKE_SIGNAL.signal(BrakeSignal::Release);
                 ebs_status.set_phase(Phase::Five);
                 
@@ -133,10 +135,6 @@ async fn main(spawner: Spawner) {
                 
             }
         }
-
-
-
-
     }
 }
 
@@ -173,7 +171,7 @@ impl CarStatus {
     pub fn new() -> Self {
         Self {
             mission:              Mission::None,
-            tank_status:          TankStatus::new(),
+            tank_status:          TankStatus::new(0.0,0.0,true, true),
             brake_pressure:       BrakePressure::new(),
             speed:                0.0,
             request:              Request::None,
@@ -253,6 +251,7 @@ impl Mission{
     }
 }
 
+#[derive(Copy, Clone)]
 enum Phase {
     Zero,  // not in dv mission
     One,   // sdc open, validation brake
@@ -262,6 +261,7 @@ enum Phase {
     Five   // running: Continous Monitoring and Brake Service
 }
 
+#[derive(Copy, Clone)]
 enum PhaseTwo {
     FirstTankCheck,
     SecondTankCheck,
@@ -276,12 +276,12 @@ struct TankStatus{
 }
 
 impl TankStatus{
-    pub fn new() -> Self {
+    pub fn new(t1: f32, t2: f32, s1: bool, s2: bool) -> Self {
         Self {
-            tank_one_pressure: 0.0,
-            tank_two_pressure: 0.0,
-            sensor_one_sanity: true,
-            sensor_two_sanity: true,
+            tank_one_pressure: t1,
+            tank_two_pressure: t2,
+            sensor_one_sanity: s1,
+            sensor_two_sanity: s2,
         }
     }
 }
@@ -321,9 +321,10 @@ async fn brake_control_task(controller: &'static mut BrakeController) {
     }
 }
 
-//can_reader da PCU
+
+
 #[embassy_executor::task]
-async fn write_can(mut tx: CanTx<'static>) {
+async fn can_writer(mut tx: CanTx<'static>) {
     loop {
         let (id, mes) = CAN_WRITER.receive().await;
         let message = embassy_stm32::can::Frame::new_standard(id, &mes);
