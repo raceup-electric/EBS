@@ -262,11 +262,11 @@ pub fn voltage_to_pressure_sp10(voltage: f32) -> f32 {
 }
 
 pub fn pneumatic_press_to_force(pp: f32) -> f32 {
-    pp * K_PP * 10.0e5
+    pp * K_PP * 1e5
 }
 
 pub fn idraulic_press_to_force(pi: f32) -> f32 {
-    pi * K_PI * 10.0e5
+    pi * K_PI * 1e5
 }
 
 
