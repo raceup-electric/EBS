@@ -57,7 +57,7 @@ async fn main(spawner: Spawner) {
     let mut brake_rear_force;
 
     loop{
-        for _i in 0..5 {
+        for _i in 0..N_ITER {
             tank_1_press = voltage_to_pressure_sp10(adc_to_voltage(adc.blocking_read(&mut tank_1_sens)));
             tank_2_press = voltage_to_pressure_sp10(adc_to_voltage(adc.blocking_read(&mut tank_2_sens)));
             brake_front_press = voltage_to_pressure_sp100(adc_to_voltage(adc.blocking_read(&mut brake_front_sens)));
@@ -106,7 +106,7 @@ async fn main(spawner: Spawner) {
             };
             can_tx.write(&force_frame).await;
 
-            Timer::after(Duration::from_millis(500)).await;
+            Timer::after(Duration::from_millis(T_ITER)).await;
         }
 
         
@@ -130,10 +130,10 @@ async fn main(spawner: Spawner) {
             };
             can_tx.write(&valve_status_frame).await;
 
-        Timer::after(Duration::from_secs(5)).await;
+        Timer::after(Duration::from_secs(T_VALVE)).await
         }
 
-        for _i in 0..5 {
+        for _i in 0..N_ITER {
             tank_1_press = voltage_to_pressure_sp10(adc_to_voltage(adc.blocking_read(&mut tank_1_sens)));
             tank_2_press = voltage_to_pressure_sp10(adc_to_voltage(adc.blocking_read(&mut tank_2_sens)));
             brake_front_press = voltage_to_pressure_sp100(adc_to_voltage(adc.blocking_read(&mut brake_front_sens)));
@@ -182,7 +182,7 @@ async fn main(spawner: Spawner) {
             };
             can_tx.write(&force_frame).await;
 
-            Timer::after(Duration::from_millis(500)).await;
+            Timer::after(Duration::from_millis(T_ITER)).await;
         }
         //send value in can
         
@@ -205,12 +205,20 @@ async fn main(spawner: Spawner) {
             };
             can_tx.write(&valve_status_frame).await;
 
-        Timer::after(Duration::from_secs(5)).await;
-
-        Timer::after(Duration::from_secs(5)).await;
+        Timer::after(Duration::from_secs(T_VALVE)).await;
         }
     }
 }
+/// Iterazioni per inviare valori forze e pressioni
+pub const N_ITER: u64 = 5;
+
+/// Tempo per ogni iterazione (millisec)
+pub const T_ITER: u64 = 500;
+
+// Tempo dopo cambio pin (sec)
+pub const T_VALVE: u64 = 1;
+
+
 
 /// Risoluzione dell'ADC in bit
 pub const ADC_RESOLUTION: u32 = 12;
