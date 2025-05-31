@@ -292,7 +292,6 @@ async fn main(spawner: Spawner) {
             }
 
             Timer::after(Duration::from_secs(5)).await;
-            Timer::after(Duration::from_secs(5)).await;
         }
     }
 }
