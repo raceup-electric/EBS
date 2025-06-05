@@ -23,6 +23,10 @@ pub enum Messages {
     Pressure(Pressure),
     /// FORCE
     Force(Force),
+    /// VOLTAGE
+    Voltage(Voltage),
+    /// RAW
+    Raw(Raw),
 }
 
 impl Messages {
@@ -35,6 +39,8 @@ impl Messages {
             16 => Messages::ValveStatus(ValveStatus::try_from(payload)?),
             17 => Messages::Pressure(Pressure::try_from(payload)?),
             18 => Messages::Force(Force::try_from(payload)?),
+            19 => Messages::Voltage(Voltage::try_from(payload)?),
+            20 => Messages::Raw(Raw::try_from(payload)?),
             n => return Err(CanError::UnknownMessageId(n)),
         };
         Ok(res)
@@ -184,22 +190,16 @@ pub struct Pressure {
 impl Pressure {
     pub const MESSAGE_ID: u32 = 17;
     
-    pub const TANK_ONE_PRESS_MIN: f32 = 0_f32;
-    pub const TANK_ONE_PRESS_MAX: f32 = 0_f32;
-    pub const TANK_TWO_PRESS_MIN: f32 = 0_f32;
-    pub const TANK_TWO_PRESS_MAX: f32 = 0_f32;
-    pub const BRAKE_FRONT_PRESS_MIN: f32 = 0_f32;
-    pub const BRAKE_FRONT_PRESS_MAX: f32 = 0_f32;
-    pub const BRAKE_REAR_PRESS_MIN: f32 = 0_f32;
-    pub const BRAKE_REAR_PRESS_MAX: f32 = 0_f32;
+    pub const TANK_PRESS_MIN: f32 = 0_f32;
+    pub const TANK_PRESS_MAX: f32 = 0_f32;
+    pub const BRAKE_PRESS_MIN: f32 = 0_f32;
+    pub const BRAKE_PRESS_MAX: f32 = 0_f32;
     
     /// Construct new PRESSURE from values
-    pub fn new(tank_one_press: f32, tank_two_press: f32, brake_front_press: f32, brake_rear_press: f32) -> Result<Self, CanError> {
+    pub fn new(tank_press: f32, brake_press: f32) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 8] };
-        res.set_tank_one_press(tank_one_press)?;
-        res.set_tank_two_press(tank_two_press)?;
-        res.set_brake_front_press(brake_front_press)?;
-        res.set_brake_rear_press(brake_rear_press)?;
+        res.set_tank_press(tank_press)?;
+        res.set_brake_press(brake_press)?;
         Ok(res)
     }
     
@@ -208,175 +208,89 @@ impl Pressure {
         &self.raw
     }
     
-    /// tank_one_press
+    /// tank_press
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "Bar"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn tank_one_press(&self) -> f32 {
-        self.tank_one_press_raw()
+    pub fn tank_press(&self) -> f32 {
+        self.tank_press_raw()
     }
     
-    /// Get raw value of tank_one_press
+    /// Get raw value of tank_press
     ///
     /// - Start bit: 0
-    /// - Signal size: 16 bits
+    /// - Signal size: 32 bits
     /// - Factor: 0.001
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn tank_one_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[0..16].load_le::<u16>();
+    pub fn tank_press_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..32].load_le::<u32>();
         
         let factor = 0.001_f32;
         let offset = 0_f32;
         (signal as f32) * factor + offset
     }
     
-    /// Set value of tank_one_press
+    /// Set value of tank_press
     #[inline(always)]
-    pub fn set_tank_one_press(&mut self, value: f32) -> Result<(), CanError> {
+    pub fn set_tank_press(&mut self, value: f32) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_f32 || 0_f32 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 17 });
         }
         let factor = 0.001_f32;
         let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
+        let value = ((value - offset) / factor) as u32;
         
-        self.raw.view_bits_mut::<Lsb0>()[0..16].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[0..32].store_le(value);
         Ok(())
     }
     
-    /// tank_two_press
+    /// brake_press
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "Bar"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn tank_two_press(&self) -> f32 {
-        self.tank_two_press_raw()
+    pub fn brake_press(&self) -> f32 {
+        self.brake_press_raw()
     }
     
-    /// Get raw value of tank_two_press
-    ///
-    /// - Start bit: 16
-    /// - Signal size: 16 bits
-    /// - Factor: 0.001
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn tank_two_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
-        
-        let factor = 0.001_f32;
-        let offset = 0_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of tank_two_press
-    #[inline(always)]
-    pub fn set_tank_two_press(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 0_f32 || 0_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 17 });
-        }
-        let factor = 0.001_f32;
-        let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
-        
-        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
-        Ok(())
-    }
-    
-    /// brake_front_press
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "Bar"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn brake_front_press(&self) -> f32 {
-        self.brake_front_press_raw()
-    }
-    
-    /// Get raw value of brake_front_press
+    /// Get raw value of brake_press
     ///
     /// - Start bit: 32
-    /// - Signal size: 16 bits
+    /// - Signal size: 32 bits
     /// - Factor: 0.001
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn brake_front_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[32..48].load_le::<u16>();
+    pub fn brake_press_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[32..64].load_le::<u32>();
         
         let factor = 0.001_f32;
         let offset = 0_f32;
         (signal as f32) * factor + offset
     }
     
-    /// Set value of brake_front_press
+    /// Set value of brake_press
     #[inline(always)]
-    pub fn set_brake_front_press(&mut self, value: f32) -> Result<(), CanError> {
+    pub fn set_brake_press(&mut self, value: f32) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_f32 || 0_f32 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 17 });
         }
         let factor = 0.001_f32;
         let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
+        let value = ((value - offset) / factor) as u32;
         
-        self.raw.view_bits_mut::<Lsb0>()[32..48].store_le(value);
-        Ok(())
-    }
-    
-    /// brake_rear_press
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "Bar"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn brake_rear_press(&self) -> f32 {
-        self.brake_rear_press_raw()
-    }
-    
-    /// Get raw value of brake_rear_press
-    ///
-    /// - Start bit: 48
-    /// - Signal size: 16 bits
-    /// - Factor: 0.001
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn brake_rear_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[48..64].load_le::<u16>();
-        
-        let factor = 0.001_f32;
-        let offset = 0_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of brake_rear_press
-    #[inline(always)]
-    pub fn set_brake_rear_press(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 0_f32 || 0_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 17 });
-        }
-        let factor = 0.001_f32;
-        let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
-        
-        self.raw.view_bits_mut::<Lsb0>()[48..64].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[32..64].store_le(value);
         Ok(())
     }
     
@@ -399,10 +313,8 @@ impl core::fmt::Debug for Pressure {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             f.debug_struct("Pressure")
-                .field("tank_one_press", &self.tank_one_press())
-                .field("tank_two_press", &self.tank_two_press())
-                .field("brake_front_press", &self.brake_front_press())
-                .field("brake_rear_press", &self.brake_rear_press())
+                .field("tank_press", &self.tank_press())
+                .field("brake_press", &self.brake_press())
             .finish()
         } else {
             f.debug_tuple("Pressure").field(&self.raw).finish()
@@ -413,11 +325,9 @@ impl core::fmt::Debug for Pressure {
 #[cfg(feature = "arb")]
 impl<'a> Arbitrary<'a> for Pressure {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
-        let tank_one_press = u.float_in_range(0_f32..=0_f32)?;
-        let tank_two_press = u.float_in_range(0_f32..=0_f32)?;
-        let brake_front_press = u.float_in_range(0_f32..=0_f32)?;
-        let brake_rear_press = u.float_in_range(0_f32..=0_f32)?;
-        Pressure::new(tank_one_press,tank_two_press,brake_front_press,brake_rear_press).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let tank_press = u.float_in_range(0_f32..=0_f32)?;
+        let brake_press = u.float_in_range(0_f32..=0_f32)?;
+        Pressure::new(tank_press,brake_press).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -433,22 +343,16 @@ pub struct Force {
 impl Force {
     pub const MESSAGE_ID: u32 = 18;
     
-    pub const TANK_ONE_FORCE_MIN: f32 = 0_f32;
-    pub const TANK_ONE_FORCE_MAX: f32 = 0_f32;
-    pub const TANK_TWO_FORCE_MIN: f32 = 0_f32;
-    pub const TANK_TWO_FORCE_MAX: f32 = 0_f32;
-    pub const BRAKE_REAR_FORCE_MIN: f32 = 0_f32;
-    pub const BRAKE_REAR_FORCE_MAX: f32 = 0_f32;
-    pub const BRAKE_FRONT_FORCE_MIN: f32 = 0_f32;
-    pub const BRAKE_FRONT_FORCE_MAX: f32 = 0_f32;
+    pub const TANK_FORCE_MIN: f32 = 0_f32;
+    pub const TANK_FORCE_MAX: f32 = 0_f32;
+    pub const BRAKE_FORCE_MIN: f32 = 0_f32;
+    pub const BRAKE_FORCE_MAX: f32 = 0_f32;
     
     /// Construct new FORCE from values
-    pub fn new(tank_one_force: f32, tank_two_force: f32, brake_rear_force: f32, brake_front_force: f32) -> Result<Self, CanError> {
+    pub fn new(tank_force: f32, brake_force: f32) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 8] };
-        res.set_tank_one_force(tank_one_force)?;
-        res.set_tank_two_force(tank_two_force)?;
-        res.set_brake_rear_force(brake_rear_force)?;
-        res.set_brake_front_force(brake_front_force)?;
+        res.set_tank_force(tank_force)?;
+        res.set_brake_force(brake_force)?;
         Ok(res)
     }
     
@@ -457,175 +361,89 @@ impl Force {
         &self.raw
     }
     
-    /// tank_one_force
+    /// tank_force
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "N"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn tank_one_force(&self) -> f32 {
-        self.tank_one_force_raw()
+    pub fn tank_force(&self) -> f32 {
+        self.tank_force_raw()
     }
     
-    /// Get raw value of tank_one_force
+    /// Get raw value of tank_force
     ///
     /// - Start bit: 0
-    /// - Signal size: 16 bits
-    /// - Factor: 0.01
+    /// - Signal size: 32 bits
+    /// - Factor: 0.001
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn tank_one_force_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[0..16].load_le::<u16>();
+    pub fn tank_force_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..32].load_le::<u32>();
         
-        let factor = 0.01_f32;
+        let factor = 0.001_f32;
         let offset = 0_f32;
         (signal as f32) * factor + offset
     }
     
-    /// Set value of tank_one_force
+    /// Set value of tank_force
     #[inline(always)]
-    pub fn set_tank_one_force(&mut self, value: f32) -> Result<(), CanError> {
+    pub fn set_tank_force(&mut self, value: f32) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_f32 || 0_f32 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 18 });
         }
-        let factor = 0.01_f32;
+        let factor = 0.001_f32;
         let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
+        let value = ((value - offset) / factor) as u32;
         
-        self.raw.view_bits_mut::<Lsb0>()[0..16].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[0..32].store_le(value);
         Ok(())
     }
     
-    /// tank_two_force
+    /// brake_force
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "N"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn tank_two_force(&self) -> f32 {
-        self.tank_two_force_raw()
+    pub fn brake_force(&self) -> f32 {
+        self.brake_force_raw()
     }
     
-    /// Get raw value of tank_two_force
-    ///
-    /// - Start bit: 16
-    /// - Signal size: 16 bits
-    /// - Factor: 0.01
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn tank_two_force_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
-        
-        let factor = 0.01_f32;
-        let offset = 0_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of tank_two_force
-    #[inline(always)]
-    pub fn set_tank_two_force(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 0_f32 || 0_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 18 });
-        }
-        let factor = 0.01_f32;
-        let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
-        
-        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
-        Ok(())
-    }
-    
-    /// brake_rear_force
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "N"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn brake_rear_force(&self) -> f32 {
-        self.brake_rear_force_raw()
-    }
-    
-    /// Get raw value of brake_rear_force
+    /// Get raw value of brake_force
     ///
     /// - Start bit: 32
-    /// - Signal size: 16 bits
-    /// - Factor: 0.01
+    /// - Signal size: 32 bits
+    /// - Factor: 0.001
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn brake_rear_force_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[32..48].load_le::<u16>();
+    pub fn brake_force_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[32..64].load_le::<u32>();
         
-        let factor = 0.01_f32;
+        let factor = 0.001_f32;
         let offset = 0_f32;
         (signal as f32) * factor + offset
     }
     
-    /// Set value of brake_rear_force
+    /// Set value of brake_force
     #[inline(always)]
-    pub fn set_brake_rear_force(&mut self, value: f32) -> Result<(), CanError> {
+    pub fn set_brake_force(&mut self, value: f32) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_f32 || 0_f32 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 18 });
         }
-        let factor = 0.01_f32;
+        let factor = 0.001_f32;
         let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
+        let value = ((value - offset) / factor) as u32;
         
-        self.raw.view_bits_mut::<Lsb0>()[32..48].store_le(value);
-        Ok(())
-    }
-    
-    /// brake_front_force
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "N"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn brake_front_force(&self) -> f32 {
-        self.brake_front_force_raw()
-    }
-    
-    /// Get raw value of brake_front_force
-    ///
-    /// - Start bit: 48
-    /// - Signal size: 16 bits
-    /// - Factor: 0.01
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn brake_front_force_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[48..64].load_le::<u16>();
-        
-        let factor = 0.01_f32;
-        let offset = 0_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of brake_front_force
-    #[inline(always)]
-    pub fn set_brake_front_force(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 0_f32 || 0_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 18 });
-        }
-        let factor = 0.01_f32;
-        let offset = 0_f32;
-        let value = ((value - offset) / factor) as u16;
-        
-        self.raw.view_bits_mut::<Lsb0>()[48..64].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[32..64].store_le(value);
         Ok(())
     }
     
@@ -648,10 +466,8 @@ impl core::fmt::Debug for Force {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             f.debug_struct("Force")
-                .field("tank_one_force", &self.tank_one_force())
-                .field("tank_two_force", &self.tank_two_force())
-                .field("brake_rear_force", &self.brake_rear_force())
-                .field("brake_front_force", &self.brake_front_force())
+                .field("tank_force", &self.tank_force())
+                .field("brake_force", &self.brake_force())
             .finish()
         } else {
             f.debug_tuple("Force").field(&self.raw).finish()
@@ -662,11 +478,307 @@ impl core::fmt::Debug for Force {
 #[cfg(feature = "arb")]
 impl<'a> Arbitrary<'a> for Force {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
-        let tank_one_force = u.float_in_range(0_f32..=0_f32)?;
-        let tank_two_force = u.float_in_range(0_f32..=0_f32)?;
-        let brake_rear_force = u.float_in_range(0_f32..=0_f32)?;
-        let brake_front_force = u.float_in_range(0_f32..=0_f32)?;
-        Force::new(tank_one_force,tank_two_force,brake_rear_force,brake_front_force).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let tank_force = u.float_in_range(0_f32..=0_f32)?;
+        let brake_force = u.float_in_range(0_f32..=0_f32)?;
+        Force::new(tank_force,brake_force).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+/// VOLTAGE
+///
+/// - ID: 19 (0x13)
+/// - Size: 8 bytes
+#[derive(Clone, Copy)]
+pub struct Voltage {
+    raw: [u8; 8],
+}
+
+impl Voltage {
+    pub const MESSAGE_ID: u32 = 19;
+    
+    pub const TANK_VOLT_MIN: f32 = 0_f32;
+    pub const TANK_VOLT_MAX: f32 = 0_f32;
+    pub const BRAKE_VOLT_MIN: f32 = 0_f32;
+    pub const BRAKE_VOLT_MAX: f32 = 0_f32;
+    
+    /// Construct new VOLTAGE from values
+    pub fn new(tank_volt: f32, brake_volt: f32) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 8] };
+        res.set_tank_volt(tank_volt)?;
+        res.set_brake_volt(brake_volt)?;
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+    
+    /// tank_volt
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: "V"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn tank_volt(&self) -> f32 {
+        self.tank_volt_raw()
+    }
+    
+    /// Get raw value of tank_volt
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 32 bits
+    /// - Factor: 1.00001
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn tank_volt_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..32].load_le::<u32>();
+        
+        let factor = 1.00001_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of tank_volt
+    #[inline(always)]
+    pub fn set_tank_volt(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 0_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 19 });
+        }
+        let factor = 1.00001_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u32;
+        
+        self.raw.view_bits_mut::<Lsb0>()[0..32].store_le(value);
+        Ok(())
+    }
+    
+    /// brake_volt
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: "V"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brake_volt(&self) -> f32 {
+        self.brake_volt_raw()
+    }
+    
+    /// Get raw value of brake_volt
+    ///
+    /// - Start bit: 32
+    /// - Signal size: 32 bits
+    /// - Factor: 0.00001
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brake_volt_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[32..64].load_le::<u32>();
+        
+        let factor = 0.00001_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of brake_volt
+    #[inline(always)]
+    pub fn set_brake_volt(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 0_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 19 });
+        }
+        let factor = 0.00001_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u32;
+        
+        self.raw.view_bits_mut::<Lsb0>()[32..64].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for Voltage {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 8 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 8];
+        raw.copy_from_slice(&payload[..8]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for Voltage {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("Voltage")
+                .field("tank_volt", &self.tank_volt())
+                .field("brake_volt", &self.brake_volt())
+            .finish()
+        } else {
+            f.debug_tuple("Voltage").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for Voltage {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let tank_volt = u.float_in_range(0_f32..=0_f32)?;
+        let brake_volt = u.float_in_range(0_f32..=0_f32)?;
+        Voltage::new(tank_volt,brake_volt).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+/// RAW
+///
+/// - ID: 20 (0x14)
+/// - Size: 4 bytes
+#[derive(Clone, Copy)]
+pub struct Raw {
+    raw: [u8; 4],
+}
+
+impl Raw {
+    pub const MESSAGE_ID: u32 = 20;
+    
+    pub const TANK_RAW_MIN: u16 = 0_u16;
+    pub const TANK_RAW_MAX: u16 = 0_u16;
+    pub const BRAKE_RAW_MIN: u16 = 0_u16;
+    pub const BRAKE_RAW_MAX: u16 = 0_u16;
+    
+    /// Construct new RAW from values
+    pub fn new(tank_raw: u16, brake_raw: u16) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 4] };
+        res.set_tank_raw(tank_raw)?;
+        res.set_brake_raw(brake_raw)?;
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+    
+    /// tank_raw
+    ///
+    /// adc value
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn tank_raw(&self) -> u16 {
+        self.tank_raw_raw()
+    }
+    
+    /// Get raw value of tank_raw
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn tank_raw_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..16].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of tank_raw
+    #[inline(always)]
+    pub fn set_tank_raw(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 20 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[0..16].store_le(value);
+        Ok(())
+    }
+    
+    /// brake_raw
+    ///
+    /// adc value
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brake_raw(&self) -> u16 {
+        self.brake_raw_raw()
+    }
+    
+    /// Get raw value of brake_raw
+    ///
+    /// - Start bit: 16
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brake_raw_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of brake_raw
+    #[inline(always)]
+    pub fn set_brake_raw(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 20 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for Raw {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 4 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 4];
+        raw.copy_from_slice(&payload[..4]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for Raw {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("Raw")
+                .field("tank_raw", &self.tank_raw())
+                .field("brake_raw", &self.brake_raw())
+            .finish()
+        } else {
+            f.debug_tuple("Raw").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for Raw {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let tank_raw = u.int_in_range(0..=0)?;
+        let brake_raw = u.int_in_range(0..=0)?;
+        Raw::new(tank_raw,brake_raw).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
