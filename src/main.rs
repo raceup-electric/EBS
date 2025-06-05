@@ -56,13 +56,7 @@ async fn main(spawner: Spawner) {
     let mut brake_front_force: f32;
     let mut brake_rear_force: f32;
 
-    loop {
-        let payload = [0xDE, 0xAD, 0xBE, 0xEF];
-        if let Ok(frame) = Frame::new_standard(0x123, &payload) {
-            can_tx.write(&frame).await;
-        }
-    }
-    /*
+
     loop{
         for _i in 0..5 {
             tank_1_press = voltage_to_pressure_sp10(adc_to_voltage(adc.blocking_read(&mut tank_1_sens)));
@@ -217,7 +211,7 @@ async fn main(spawner: Spawner) {
         Timer::after(Duration::from_secs(5)).await;
         }
     }
-*/
+
 }
 
 /// Risoluzione dell'ADC in bit
