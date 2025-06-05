@@ -1,9 +1,7 @@
 pub mod frame;
 pub mod can_controller;
-pub use can_controller::CanController;
 #[allow(dead_code)]
 pub mod messages;
-pub use frame::CanFrame;
 
 
 #[macro_export]

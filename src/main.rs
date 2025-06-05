@@ -4,15 +4,10 @@
 
 use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
-use embassy_stm32::gpio::{Output, Level, Speed};
 use embassy_time::Timer;
-use static_cell::StaticCell;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use panic_probe as _;
 use defmt_rtt as _;
-use embassy_sync::channel::Channel;
 use embassy_time::Duration;
-use embassy_stm32::can::{CanTx, CanRx};
 use embassy_stm32::can::Frame;
 use crate::can_management::messages::{Voltage, Pressure, Force, Raw};
 
@@ -22,15 +17,12 @@ use can_management::can_controller::CanController;
 
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let p = embassy_stm32::init(Default::default());
 
     let mut adc = Adc::new(p.ADC1);
     
-    let mut brake_valve_1 = Output::new(p.PC6, Level::High, Speed::Low);
-    let mut brake_valve_2 = Output::new(p.PC7, Level::High, Speed::Low);
-   
-
+ 
     let mut can = CanController::new_can2(
         p.CAN2, p.PB12, p.PB13, 500_000,
         p.CAN1, p.PA11, p.PA12,
