@@ -176,7 +176,11 @@ async fn main(_spawner: Spawner) {
                     can_tx.write(&fail_frame).await;
                 }
             }
+
         }
+        
+        Timer::after(Duration::from_millis(50)).await;
+        
         
     }
 }
