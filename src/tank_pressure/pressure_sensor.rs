@@ -3,7 +3,6 @@ use crate::tank_pressure::sensor::Sensor;
 use crate::tank_pressure::filter_buffer::FilterBuffer;
 use crate::tank_pressure::utils::*;
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
-use super::super::can_management;
 use embassy_stm32::Peri;
 use crate::TANK_STATUS;
 use crate::TankStatus;  

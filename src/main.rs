@@ -4,22 +4,17 @@
 use brake::BrakeController;
 use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
-use embassy_stm32::pac::crc::regs::Cr;
-use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
-use embassy_stm32::gpio::{Output, Level, Speed};
 use embassy_time::Timer;
 use defmt::*;
 use static_cell::StaticCell;
 use embassy_sync::signal::Signal;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::mutex::Mutex;
 use panic_probe as _;
 use defmt_rtt as _;
 use embassy_sync::channel::Channel;
 use embassy_time::Duration;
-use embassy_stm32::can::{CanTx, CanRx};
-use crate::can_management::CanFrame;
-use crate::can_management::messages::Messages;
+use embassy_stm32::can::{CanRx, CanTx, Id};
+use crate::can_management::messages::{ResGo, CarStatus, EbsStatus, CarMission, CheckAsbReq, EbsBrakeReq};
 
 mod tank_pressure;
 mod brake;
@@ -70,9 +65,10 @@ async fn main(spawner: Spawner) {
     let (can_tx, can_rx) = can.can.split();
 
     spawner.spawn(can_writer(can_tx)).unwrap();
+    spawner.spawn(can_reader(can_rx)).unwrap();
 
-    let mut car_status = CarStatus::new();
-    let mut ebs_status = EbsStatus::new();
+    let mut car_status = GlobalStatus::new();
+    let mut ebs_status = EbsState::new();
     
     loop{
         car_status.update();
@@ -87,13 +83,13 @@ async fn main(spawner: Spawner) {
                 }
             }
             Phase::One   => {
-                if car_status.request == Request::AsbCheck {
+                if car_status.ASB_check {
                     ebs_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
                 else {
-                let tank_press_validation = is_tank_pressure_valid(& car_status.tank_status);
-                let tank_brake_consistency = check_tank_brake_pressure_consistency(& car_status.tank_status, & car_status.brake_pressure);
-                //send message for validation
+                    let tank_press_validation = is_tank_pressure_valid(& car_status.tank_status);
+                    let tank_brake_consistency = check_tank_brake_pressure_consistency(& car_status.tank_status, & car_status.brake_pressure);
+                    let sb_check = tank_brake_consistency && tank_press_validation;
                 }
             }
             Phase::Two(subphase)  => match subphase {
@@ -139,14 +135,16 @@ async fn main(spawner: Spawner) {
 }
 
 //informazioni ricevute esternamente dalla macchina a stati
-struct CarStatus {
+struct GlobalStatus {
     mission:             Mission,
     tank_status:         TankStatus,
     brake_pressure:      BrakePressure,
     speed:               f32,
-    request:             Request,
+    brakeReq:            bool,
+    ASB_check:           bool,
+    ASB_check_ack:       bool,
+    Res_GO:              bool,
     error:               bool,
-    
 }
 struct BrakePressure {
     front: f32,
@@ -167,20 +165,23 @@ impl BrakePressure {
 }
 
 
-impl CarStatus {
+impl GlobalStatus {
     pub fn new() -> Self {
         Self {
             mission:              Mission::None,
             tank_status:          TankStatus::new(0.0,0.0,true, true),
             brake_pressure:       BrakePressure::new(),
             speed:                0.0,
-            request:              Request::None,
-            error:                false,
+            brakeReq:             false,
+            ASB_check:            false,
+            ASB_check_ack:        false,
+            Res_GO:               false,
+            error:                false
 
         }
     }
 
-    pub async fn update(&mut self) {
+    pub fn update(&mut self) {
         if let Some(new_mission) = MISSION.try_take() {
             self.mission = new_mission;
         }
@@ -199,8 +200,8 @@ impl CarStatus {
     }
 }
 //da intendere come le informazioni interne alla macchina a stati durante l'esecuzione
-//la differenza primaria tra EbsStatus e CarStatus è che i valori appartenti alla prima sono computati e modificati dalla macchina a stati mentre i valori della seconda vengono solo letti
-struct EbsStatus {
+//la differenza primaria tra EbsStatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla macchina a stati mentre i valori della seconda vengono solo letti
+struct EbsState {
     phase:   Phase,
     tank_validation: bool,
     tank_brake_consistency: bool,
@@ -208,7 +209,7 @@ struct EbsStatus {
     brake_engaged: bool,
 }
 
-impl EbsStatus {
+impl EbsState {
     pub fn new() -> Self {
         Self {
             phase: Phase::Zero,
@@ -308,9 +309,41 @@ pub fn check_tank_brake_pressure_consistency(tank_status: &TankStatus, brake_pre
     brake_press.rear  > REAR_PRESS_MULT * tank_status.tank_two_pressure
 }
 
-pub fn send_phase_one_validation(tank_press_validation: bool, tank_brake_consistency_check: bool, car_status: &CarStatus){
+pub fn send_phase_one_validation(tank_press_validation: bool, tank_brake_consistency_check: bool, car_status: &GlobalStatus){
     //generate message EBS_Status for phase one
 }
+
+
+// pub async fn parse_tank_ebs_msg(system_check: bool, press_left_tank: f32, press_right_tank: f32, sanity_left_sensor: bool, sanity_right_sensor: bool) {
+//         match Force::new(system_check, press_left_tank, press_right, ) {
+//             Ok(force_msg) => {
+//                 match Frame::new_standard(
+//                     Force::MESSAGE_ID as u16,
+//                     force_msg.raw(),
+//                 ) {
+//                     Ok(force_frame) => {
+//                         can_tx.write(&force_frame).await;
+//                     }
+//                     Err(_) => {
+//                         if let Ok(err_frame) = Frame::new_standard(1u16, &[]) {
+//                             can_tx.write(&err_frame).await;
+//                         }
+//                     }
+//                 }
+//             }
+//             Err(_) => {
+//                 let err_payload = [0xFFu8; 8];
+//                 if let Ok(err_frame) = Frame::new_standard(
+//                     Force::MESSAGE_ID as u16,
+//                     &err_payload,
+//                 ) {
+//                     can_tx.write(&err_frame).await;
+//                 } else if let Ok(fail_frame) = Frame::new_standard(1u16, &[]) {
+//                     can_tx.write(&fail_frame).await;
+//                 }
+//             }
+//         }    
+// }
 
 #[embassy_executor::task]
 async fn brake_control_task(controller: &'static mut BrakeController) {
@@ -331,5 +364,52 @@ async fn can_writer(mut tx: CanTx<'static>) {
         if let Ok(some) = message {
             tx.write(&some).await;
         }
+    }
+}
+
+#[embassy_executor::task]
+async fn can_reader(
+    mut rx: CanRx<'static>
+){
+    loop {
+        match rx.read().await {
+            Ok(frame) => {
+                let id = match frame.frame.id() {
+                    Id::Standard(id) => id.as_raw() as u32, 
+                    Id::Extended(id) => id.standard_id().as_raw() as u32, 
+                };
+                let payload = frame.frame.data();
+                match id {
+                    CarStatus::MESSAGE_ID => {
+                        let mut message = [0u8; CarStatus::DLC as usize];
+                        message.copy_from_slice(payload);
+                        if let Ok(mex) = CarStatus::new_from_raw(message)  {
+                            
+                        }
+                    },
+
+                    ResGo::MESSAGE_ID => {
+
+                    },
+
+                    CarMission::MESSAGE_ID => {
+
+                    },
+
+                    CheckAsbReq::MESSAGE_ID => {
+
+                    },
+
+                    EbsBrakeReq::MESSAGE_ID => {
+
+                    },
+                    
+                    _ => {}
+
+                }
+            }
+            Err(_) => info!("No messages")
+        }
+        embassy_time::Timer::after_millis(2).await;
     }
 }

@@ -1,4 +1,3 @@
-#![allow(warnings)]
 // Generated code!
 #![allow(unused_comparisons, unreachable_patterns)]
 #![allow(clippy::let_and_return, clippy::eq_op)]
@@ -18,8 +17,12 @@ use arbitrary::{Arbitrary, Unstructured};
 #[derive(Clone)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub enum Messages {
-    /// TanksEBS
-    TanksEbs(TanksEbs),
+    /// ResGO
+    ResGo(ResGo),
+    /// EbsStatus
+    EbsStatus(EbsStatus),
+    /// Asms
+    Asms(Asms),
     /// CarMission
     CarMission(CarMission),
     /// PcuFault
@@ -50,8 +53,12 @@ pub enum Messages {
     CarStatus(CarStatus),
     /// CarSettings
     CarSettings(CarSettings),
-    /// CheckASB
-    CheckAsb(CheckAsb),
+    /// CheckASBReq
+    CheckAsbReq(CheckAsbReq),
+    /// EbsBrakeReq
+    EbsBrakeReq(EbsBrakeReq),
+    /// ResStatus
+    ResStatus(ResStatus),
     /// LapStart
     LapStart(LapStart),
     /// CarMissionStatus
@@ -68,6 +75,8 @@ pub enum Messages {
     SuspFront(SuspFront),
     /// TempFrontR
     TempFrontR(TempFrontR),
+    /// PressBrake
+    PressBrake(PressBrake),
     /// InvVolt
     InvVolt(InvVolt),
     /// Pcu
@@ -80,6 +89,8 @@ pub enum Messages {
     PcuSwControl(PcuSwControl),
     /// PcuRfAck
     PcuRfAck(PcuRfAck),
+    /// EmbeddedAliveCheck
+    EmbeddedAliveCheck(EmbeddedAliveCheck),
     /// Lem
     Lem(Lem),
 }
@@ -90,7 +101,9 @@ impl Messages {
     pub fn from_can_message(id: u32, payload: &[u8]) -> Result<Self, CanError> {
         
         let res = match id {
-            60 => Messages::TanksEbs(TanksEbs::try_from(payload)?),
+            32 => Messages::ResGo(ResGo::try_from(payload)?),
+            60 => Messages::EbsStatus(EbsStatus::try_from(payload)?),
+            65 => Messages::Asms(Asms::try_from(payload)?),
             71 => Messages::CarMission(CarMission::try_from(payload)?),
             81 => Messages::PcuFault(PcuFault::try_from(payload)?),
             82 => Messages::Paddle(Paddle::try_from(payload)?),
@@ -106,7 +119,9 @@ impl Messages {
             100 => Messages::Map(Map::try_from(payload)?),
             101 => Messages::CarStatus(CarStatus::try_from(payload)?),
             102 => Messages::CarSettings(CarSettings::try_from(payload)?),
-            104 => Messages::CheckAsb(CheckAsb::try_from(payload)?),
+            104 => Messages::CheckAsbReq(CheckAsbReq::try_from(payload)?),
+            105 => Messages::EbsBrakeReq(EbsBrakeReq::try_from(payload)?),
+            106 => Messages::ResStatus(ResStatus::try_from(payload)?),
             112 => Messages::LapStart(LapStart::try_from(payload)?),
             113 => Messages::CarMissionStatus(CarMissionStatus::try_from(payload)?),
             256 => Messages::Temp1(Temp1::try_from(payload)?),
@@ -115,12 +130,14 @@ impl Messages {
             259 => Messages::Reserved2(Reserved2::try_from(payload)?),
             260 => Messages::SuspFront(SuspFront::try_from(payload)?),
             261 => Messages::TempFrontR(TempFrontR::try_from(payload)?),
+            264 => Messages::PressBrake(PressBrake::try_from(payload)?),
             288 => Messages::InvVolt(InvVolt::try_from(payload)?),
             304 => Messages::Pcu(Pcu::try_from(payload)?),
             305 => Messages::Calib(Calib::try_from(payload)?),
             306 => Messages::CalibAck(CalibAck::try_from(payload)?),
             307 => Messages::PcuSwControl(PcuSwControl::try_from(payload)?),
             308 => Messages::PcuRfAck(PcuRfAck::try_from(payload)?),
+            310 => Messages::EmbeddedAliveCheck(EmbeddedAliveCheck::try_from(payload)?),
             962 => Messages::Lem(Lem::try_from(payload)?),
             n => return Err(CanError::UnknownMessageId(n)),
         };
@@ -128,35 +145,141 @@ impl Messages {
     }
 }
 
-/// TanksEBS
+/// ResGO
+///
+/// - ID: 32 (0x20)
+/// - Size: 1 bytes
+/// - Transmitter: VCU
+#[derive(Clone, Copy)]
+pub struct ResGo {
+    raw: [u8; 1],
+}
+
+impl ResGo {
+    pub const MESSAGE_ID: u32 = 32;
+    pub const DLC: u8 = 1;
+    
+    
+    /// Construct new ResGO from values
+    pub fn new(go_signal: bool) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 1] };
+        res.set_go_signal(go_signal)?;
+        Ok(res)
+    }
+    
+    /// Construct new ResGO from raw
+    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 1] {
+        &self.raw
+    }
+    
+    /// go_signal
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn go_signal(&self) -> bool {
+        self.go_signal_raw()
+    }
+    
+    /// Get raw value of go_signal
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn go_signal_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of go_signal
+    #[inline(always)]
+    pub fn set_go_signal(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for ResGo {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 1 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 1];
+        raw.copy_from_slice(&payload[..1]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for ResGo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("ResGo")
+                .field("go_signal", &self.go_signal())
+            .finish()
+        } else {
+            f.debug_tuple("ResGo").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for ResGo {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let go_signal = u.int_in_range(0..=1)? == 1;
+        ResGo::new(go_signal).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+/// EbsStatus
 ///
 /// - ID: 60 (0x3c)
 /// - Size: 2 bytes
+/// - Transmitter: EBS
 #[derive(Clone, Copy)]
-pub struct TanksEbs {
+pub struct EbsStatus {
     raw: [u8; 2],
 }
 
-impl TanksEbs {
+impl EbsStatus {
     pub const MESSAGE_ID: u32 = 60;
+    pub const DLC: u8 = 2;
     
     pub const PRESS_LEFT_TANK_MIN: f32 = 6_f32;
     pub const PRESS_LEFT_TANK_MAX: f32 = 10_f32;
     pub const PRESS_RIGHT_TANK_MIN: f32 = 6_f32;
     pub const PRESS_RIGHT_TANK_MAX: f32 = 10_f32;
     
-    /// Construct new TanksEBS from values
-    pub fn new(system_check: bool, press_left_tank: f32, press_right_tank: f32, sanity_left_sensor: bool, sanity_right_sensor: bool) -> Result<Self, CanError> {
+    /// Construct new EbsStatus from values
+    pub fn new(system_check: bool, press_left_tank: f32, press_right_tank: f32, sanity_left_sensor: bool, sanity_right_sensor: bool, asb_check: bool, brakes_engaged: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 2] };
         res.set_system_check(system_check)?;
         res.set_press_left_tank(press_left_tank)?;
         res.set_press_right_tank(press_right_tank)?;
         res.set_sanity_left_sensor(sanity_left_sensor)?;
         res.set_sanity_right_sensor(sanity_right_sensor)?;
+        res.set_asb_check(asb_check)?;
+        res.set_brakes_engaged(brakes_engaged)?;
         Ok(res)
     }
     
-    /// Construct new TanksEBS from raw
+    /// Construct new EbsStatus from raw
     pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
         let res = Self { raw };
         Ok(res)
@@ -355,9 +478,77 @@ impl TanksEbs {
         Ok(())
     }
     
+    /// ASB_check
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn asb_check(&self) -> bool {
+        self.asb_check_raw()
+    }
+    
+    /// Get raw value of ASB_check
+    ///
+    /// - Start bit: 13
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn asb_check_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[13..14].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of ASB_check
+    #[inline(always)]
+    pub fn set_asb_check(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[13..14].store_le(value);
+        Ok(())
+    }
+    
+    /// brakes_engaged
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brakes_engaged(&self) -> bool {
+        self.brakes_engaged_raw()
+    }
+    
+    /// Get raw value of brakes_engaged
+    ///
+    /// - Start bit: 14
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brakes_engaged_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[14..15].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of brakes_engaged
+    #[inline(always)]
+    pub fn set_brakes_engaged(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[14..15].store_le(value);
+        Ok(())
+    }
+    
 }
 
-impl core::convert::TryFrom<&[u8]> for TanksEbs {
+impl core::convert::TryFrom<&[u8]> for EbsStatus {
     type Error = CanError;
     
     #[inline(always)]
@@ -370,31 +561,137 @@ impl core::convert::TryFrom<&[u8]> for TanksEbs {
 }
 
 #[cfg(feature = "debug")]
-impl core::fmt::Debug for TanksEbs {
+impl core::fmt::Debug for EbsStatus {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
-            f.debug_struct("TanksEbs")
+            f.debug_struct("EbsStatus")
                 .field("system_check", &self.system_check())
                 .field("press_left_tank", &self.press_left_tank())
                 .field("press_right_tank", &self.press_right_tank())
                 .field("sanity_left_sensor", &self.sanity_left_sensor())
                 .field("sanity_right_sensor", &self.sanity_right_sensor())
+                .field("asb_check", &self.asb_check())
+                .field("brakes_engaged", &self.brakes_engaged())
             .finish()
         } else {
-            f.debug_tuple("TanksEbs").field(&self.raw).finish()
+            f.debug_tuple("EbsStatus").field(&self.raw).finish()
         }
     }
 }
 
 #[cfg(feature = "arb")]
-impl<'a> Arbitrary<'a> for TanksEbs {
+impl<'a> Arbitrary<'a> for EbsStatus {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let system_check = u.int_in_range(0..=1)? == 1;
         let press_left_tank = u.float_in_range(6_f32..=10_f32)?;
         let press_right_tank = u.float_in_range(6_f32..=10_f32)?;
         let sanity_left_sensor = u.int_in_range(0..=1)? == 1;
         let sanity_right_sensor = u.int_in_range(0..=1)? == 1;
-        TanksEbs::new(system_check,press_left_tank,press_right_tank,sanity_left_sensor,sanity_right_sensor).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let asb_check = u.int_in_range(0..=1)? == 1;
+        let brakes_engaged = u.int_in_range(0..=1)? == 1;
+        EbsStatus::new(system_check,press_left_tank,press_right_tank,sanity_left_sensor,sanity_right_sensor,asb_check,brakes_engaged).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+/// Asms
+///
+/// - ID: 65 (0x41)
+/// - Size: 1 bytes
+/// - Transmitter: PCU
+#[derive(Clone, Copy)]
+pub struct Asms {
+    raw: [u8; 1],
+}
+
+impl Asms {
+    pub const MESSAGE_ID: u32 = 65;
+    pub const DLC: u8 = 1;
+    
+    
+    /// Construct new Asms from values
+    pub fn new(asms_sens: bool) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 1] };
+        res.set_asms_sens(asms_sens)?;
+        Ok(res)
+    }
+    
+    /// Construct new Asms from raw
+    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 1] {
+        &self.raw
+    }
+    
+    /// Asms_sens
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: "High"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn asms_sens(&self) -> bool {
+        self.asms_sens_raw()
+    }
+    
+    /// Get raw value of Asms_sens
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn asms_sens_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of Asms_sens
+    #[inline(always)]
+    pub fn set_asms_sens(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for Asms {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 1 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 1];
+        raw.copy_from_slice(&payload[..1]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for Asms {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("Asms")
+                .field("asms_sens", &self.asms_sens())
+            .finish()
+        } else {
+            f.debug_tuple("Asms").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for Asms {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let asms_sens = u.int_in_range(0..=1)? == 1;
+        Asms::new(asms_sens).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -410,6 +707,7 @@ pub struct CarMission {
 
 impl CarMission {
     pub const MESSAGE_ID: u32 = 71;
+    pub const DLC: u8 = 1;
     
     pub const MISSION_MIN: u8 = 0_u8;
     pub const MISSION_MAX: u8 = 7_u8;
@@ -559,6 +857,7 @@ pub struct PcuFault {
 
 impl PcuFault {
     pub const MESSAGE_ID: u32 = 81;
+    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuFault from values
@@ -882,6 +1181,7 @@ pub struct Paddle {
 
 impl Paddle {
     pub const MESSAGE_ID: u32 = 82;
+    pub const DLC: u8 = 1;
     
     pub const REGEN_MIN: u8 = 0_u8;
     pub const REGEN_MAX: u8 = 100_u8;
@@ -990,6 +1290,7 @@ pub struct Driver {
 
 impl Driver {
     pub const MESSAGE_ID: u32 = 83;
+    pub const DLC: u8 = 4;
     
     pub const THROTTLE_MIN: u8 = 0_u8;
     pub const THROTTLE_MAX: u8 = 100_u8;
@@ -1336,6 +1637,7 @@ pub struct BmsLv1 {
 
 impl BmsLv1 {
     pub const MESSAGE_ID: u32 = 84;
+    pub const DLC: u8 = 7;
     
     pub const MAX_VOLT_MIN: f32 = 0_f32;
     pub const MAX_VOLT_MAX: f32 = 0_f32;
@@ -1586,6 +1888,7 @@ pub struct BmsLv2 {
 
 impl BmsLv2 {
     pub const MESSAGE_ID: u32 = 85;
+    pub const DLC: u8 = 7;
     
     pub const MAX_TEMP_MIN: u16 = 0_u16;
     pub const MAX_TEMP_MAX: u16 = 0_u16;
@@ -1818,6 +2121,7 @@ pub struct BmsHv1 {
 
 impl BmsHv1 {
     pub const MESSAGE_ID: u32 = 87;
+    pub const DLC: u8 = 7;
     
     pub const MAX_VOLT_MIN: f32 = 0_f32;
     pub const MAX_VOLT_MAX: f32 = 0_f32;
@@ -2076,6 +2380,7 @@ pub struct BmsHv2 {
 
 impl BmsHv2 {
     pub const MESSAGE_ID: u32 = 88;
+    pub const DLC: u8 = 7;
     
     pub const MAX_TEMP_MIN: u16 = 0_u16;
     pub const MAX_TEMP_MAX: u16 = 0_u16;
@@ -2316,6 +2621,7 @@ pub struct Imu1 {
 
 impl Imu1 {
     pub const MESSAGE_ID: u32 = 96;
+    pub const DLC: u8 = 8;
     
     pub const ACC_X_MIN: i32 = 0_i32;
     pub const ACC_X_MAX: i32 = 0_i32;
@@ -2472,6 +2778,7 @@ pub struct Imu2 {
 
 impl Imu2 {
     pub const MESSAGE_ID: u32 = 97;
+    pub const DLC: u8 = 8;
     
     pub const ACC_Z_MIN: i32 = 0_i32;
     pub const ACC_Z_MAX: i32 = 0_i32;
@@ -2628,6 +2935,7 @@ pub struct Imu3 {
 
 impl Imu3 {
     pub const MESSAGE_ID: u32 = 98;
+    pub const DLC: u8 = 8;
     
     pub const OMEGA_Y_MIN: i32 = 0_i32;
     pub const OMEGA_Y_MAX: i32 = 0_i32;
@@ -2786,6 +3094,7 @@ pub struct ImuCalib {
 
 impl ImuCalib {
     pub const MESSAGE_ID: u32 = 99;
+    pub const DLC: u8 = 1;
     
     
     /// Construct new IMUCalib from values
@@ -2887,6 +3196,7 @@ pub struct Map {
 
 impl Map {
     pub const MESSAGE_ID: u32 = 100;
+    pub const DLC: u8 = 2;
     
     pub const POWER_MIN: u8 = 1_u8;
     pub const POWER_MAX: u8 = 12_u8;
@@ -3074,40 +3384,49 @@ impl<'a> Arbitrary<'a> for Map {
 /// CarStatus
 ///
 /// - ID: 101 (0x65)
-/// - Size: 2 bytes
+/// - Size: 4 bytes
 /// - Transmitter: VCU
 #[derive(Clone, Copy)]
 pub struct CarStatus {
-    raw: [u8; 2],
+    raw: [u8; 4],
 }
 
 impl CarStatus {
     pub const MESSAGE_ID: u32 = 101;
+    pub const DLC: u8 = 4;
     
+    pub const RUNNING_STATUS_MIN: u8 = 0_u8;
+    pub const RUNNING_STATUS_MAX: u8 = 3_u8;
     pub const SPEED_MIN: u8 = 0_u8;
     pub const SPEED_MAX: u8 = 0_u8;
+    pub const BRAKE_FRONT_PRESS_MIN: f32 = 0_f32;
+    pub const BRAKE_FRONT_PRESS_MAX: f32 = 60_f32;
+    pub const BRAKE_REAR_PRESS_MIN: f32 = 0_f32;
+    pub const BRAKE_REAR_PRESS_MAX: f32 = 60_f32;
     
     /// Construct new CarStatus from values
-    pub fn new(hv: bool, r2d: bool, air1: bool, rf: bool, air2: bool, precharge: bool, speed: u8) -> Result<Self, CanError> {
-        let mut res = Self { raw: [0u8; 2] };
+    pub fn new(hv: bool, air1: bool, air2: bool, as_node: bool, rtd_req: bool, running_status: u8, speed: u8, brake_front_press: f32, brake_rear_press: f32) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 4] };
         res.set_hv(hv)?;
-        res.set_r2d(r2d)?;
         res.set_air1(air1)?;
-        res.set_rf(rf)?;
         res.set_air2(air2)?;
-        res.set_precharge(precharge)?;
+        res.set_as_node(as_node)?;
+        res.set_rtd_req(rtd_req)?;
+        res.set_running_status(running_status)?;
         res.set_speed(speed)?;
+        res.set_brake_front_press(brake_front_press)?;
+        res.set_brake_rear_press(brake_rear_press)?;
         Ok(res)
     }
     
     /// Construct new CarStatus from raw
-    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
+    pub fn new_from_raw(raw: [u8;4] ) -> Result<Self, CanError> {
         let res = Self { raw };
         Ok(res)
     }
     
     /// Access message payload raw value
-    pub fn raw(&self) -> &[u8; 2] {
+    pub fn raw(&self) -> &[u8; 4] {
         &self.raw
     }
     
@@ -3115,7 +3434,7 @@ impl CarStatus {
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: "on"
+    /// - Unit: " Off/On"
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn hv(&self) -> bool {
@@ -3145,45 +3464,11 @@ impl CarStatus {
         Ok(())
     }
     
-    /// R2D
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "on"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn r2d(&self) -> bool {
-        self.r2d_raw()
-    }
-    
-    /// Get raw value of R2D
-    ///
-    /// - Start bit: 1
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn r2d_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[1..2].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of R2D
-    #[inline(always)]
-    pub fn set_r2d(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[1..2].store_le(value);
-        Ok(())
-    }
-    
     /// AIR1
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: "closed"
+    /// - Unit: " Closed/Open"
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn air1(&self) -> bool {
@@ -3192,7 +3477,7 @@ impl CarStatus {
     
     /// Get raw value of AIR1
     ///
-    /// - Start bit: 3
+    /// - Start bit: 1
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3200,7 +3485,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn air1_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[3..4].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[1..2].load_le::<u8>();
         
         signal == 1
     }
@@ -3209,41 +3494,7 @@ impl CarStatus {
     #[inline(always)]
     pub fn set_air1(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[3..4].store_le(value);
-        Ok(())
-    }
-    
-    /// RF
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "enabled"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn rf(&self) -> bool {
-        self.rf_raw()
-    }
-    
-    /// Get raw value of RF
-    ///
-    /// - Start bit: 2
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn rf_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[2..3].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of RF
-    #[inline(always)]
-    pub fn set_rf(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[2..3].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[1..2].store_le(value);
         Ok(())
     }
     
@@ -3251,7 +3502,7 @@ impl CarStatus {
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: "closed"
+    /// - Unit: " Closed/Open"
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn air2(&self) -> bool {
@@ -3260,7 +3511,7 @@ impl CarStatus {
     
     /// Get raw value of AIR2
     ///
-    /// - Start bit: 4
+    /// - Start bit: 2
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3268,7 +3519,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn air2_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[2..3].load_le::<u8>();
         
         signal == 1
     }
@@ -3277,41 +3528,120 @@ impl CarStatus {
     #[inline(always)]
     pub fn set_air2(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[2..3].store_le(value);
         Ok(())
     }
     
-    /// precharge
+    /// AS_NODE
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: "done"
+    /// - Unit: " Open/Closed"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn precharge(&self) -> bool {
-        self.precharge_raw()
+    pub fn as_node(&self) -> bool {
+        self.as_node_raw()
     }
     
-    /// Get raw value of precharge
+    /// Get raw value of AS_NODE
     ///
-    /// - Start bit: 5
+    /// - Start bit: 3
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn precharge_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[5..6].load_le::<u8>();
+    pub fn as_node_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[3..4].load_le::<u8>();
         
         signal == 1
     }
     
-    /// Set value of precharge
+    /// Set value of AS_NODE
     #[inline(always)]
-    pub fn set_precharge(&mut self, value: bool) -> Result<(), CanError> {
+    pub fn set_as_node(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[5..6].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[3..4].store_le(value);
+        Ok(())
+    }
+    
+    /// rtd_req
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: " Open/Closed"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn rtd_req(&self) -> bool {
+        self.rtd_req_raw()
+    }
+    
+    /// Get raw value of rtd_req
+    ///
+    /// - Start bit: 4
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn rtd_req_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of rtd_req
+    #[inline(always)]
+    pub fn set_rtd_req(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
+        Ok(())
+    }
+    
+    /// RunningStatus
+    ///
+    /// - Min: 0
+    /// - Max: 3
+    /// - Unit: " Phase"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn running_status(&self) -> CarStatusRunningStatus {
+        let signal = self.raw.view_bits::<Lsb0>()[5..7].load_le::<u8>();
+        
+        match signal {
+            3 => CarStatusRunningStatus::Running,
+            2 => CarStatusRunningStatus::TsReady,
+            1 => CarStatusRunningStatus::PrechargeStarted,
+            0 => CarStatusRunningStatus::SystemOff,
+            _ => CarStatusRunningStatus::_Other(self.running_status_raw()),
+        }
+    }
+    
+    /// Get raw value of RunningStatus
+    ///
+    /// - Start bit: 5
+    /// - Signal size: 2 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn running_status_raw(&self) -> u8 {
+        let signal = self.raw.view_bits::<Lsb0>()[5..7].load_le::<u8>();
+        
+        signal
+    }
+    
+    /// Set value of RunningStatus
+    #[inline(always)]
+    pub fn set_running_status(&mut self, value: u8) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u8 || 3_u8 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 101 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[5..7].store_le(value);
         Ok(())
     }
     
@@ -3319,7 +3649,7 @@ impl CarStatus {
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: "km/h"
+    /// - Unit: " km/h"
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn speed(&self) -> u8 {
@@ -3328,7 +3658,7 @@ impl CarStatus {
     
     /// Get raw value of speed
     ///
-    /// - Start bit: 8
+    /// - Start bit: 7
     /// - Signal size: 8 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3336,7 +3666,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn speed_raw(&self) -> u8 {
-        let signal = self.raw.view_bits::<Lsb0>()[8..16].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[7..15].load_le::<u8>();
         
         signal
     }
@@ -3348,7 +3678,93 @@ impl CarStatus {
         if value < 0_u8 || 0_u8 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 101 });
         }
-        self.raw.view_bits_mut::<Lsb0>()[8..16].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[7..15].store_le(value);
+        Ok(())
+    }
+    
+    /// brake_front_press
+    ///
+    /// - Min: 0
+    /// - Max: 60
+    /// - Unit: "Bar"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brake_front_press(&self) -> f32 {
+        self.brake_front_press_raw()
+    }
+    
+    /// Get raw value of brake_front_press
+    ///
+    /// - Start bit: 15
+    /// - Signal size: 8 bits
+    /// - Factor: 0.25
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brake_front_press_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[15..23].load_le::<u8>();
+        
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of brake_front_press
+    #[inline(always)]
+    pub fn set_brake_front_press(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 60_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 101 });
+        }
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u8;
+        
+        self.raw.view_bits_mut::<Lsb0>()[15..23].store_le(value);
+        Ok(())
+    }
+    
+    /// brake_rear_press
+    ///
+    /// - Min: 0
+    /// - Max: 60
+    /// - Unit: "Bar"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brake_rear_press(&self) -> f32 {
+        self.brake_rear_press_raw()
+    }
+    
+    /// Get raw value of brake_rear_press
+    ///
+    /// - Start bit: 23
+    /// - Signal size: 8 bits
+    /// - Factor: 0.25
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brake_rear_press_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[23..31].load_le::<u8>();
+        
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of brake_rear_press
+    #[inline(always)]
+    pub fn set_brake_rear_press(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 60_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 101 });
+        }
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u8;
+        
+        self.raw.view_bits_mut::<Lsb0>()[23..31].store_le(value);
         Ok(())
     }
     
@@ -3359,9 +3775,9 @@ impl core::convert::TryFrom<&[u8]> for CarStatus {
     
     #[inline(always)]
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
-        if payload.len() != 2 { return Err(CanError::InvalidPayloadSize); }
-        let mut raw = [0u8; 2];
-        raw.copy_from_slice(&payload[..2]);
+        if payload.len() != 4 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 4];
+        raw.copy_from_slice(&payload[..4]);
         Ok(Self { raw })
     }
 }
@@ -3372,12 +3788,14 @@ impl core::fmt::Debug for CarStatus {
         if f.alternate() {
             f.debug_struct("CarStatus")
                 .field("hv", &self.hv())
-                .field("r2d", &self.r2d())
                 .field("air1", &self.air1())
-                .field("rf", &self.rf())
                 .field("air2", &self.air2())
-                .field("precharge", &self.precharge())
+                .field("as_node", &self.as_node())
+                .field("rtd_req", &self.rtd_req())
+                .field("running_status", &self.running_status())
                 .field("speed", &self.speed())
+                .field("brake_front_press", &self.brake_front_press())
+                .field("brake_rear_press", &self.brake_rear_press())
             .finish()
         } else {
             f.debug_tuple("CarStatus").field(&self.raw).finish()
@@ -3389,15 +3807,40 @@ impl core::fmt::Debug for CarStatus {
 impl<'a> Arbitrary<'a> for CarStatus {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let hv = u.int_in_range(0..=1)? == 1;
-        let r2d = u.int_in_range(0..=1)? == 1;
         let air1 = u.int_in_range(0..=1)? == 1;
-        let rf = u.int_in_range(0..=1)? == 1;
         let air2 = u.int_in_range(0..=1)? == 1;
-        let precharge = u.int_in_range(0..=1)? == 1;
+        let as_node = u.int_in_range(0..=1)? == 1;
+        let rtd_req = u.int_in_range(0..=1)? == 1;
+        let running_status = u.int_in_range(0..=3)?;
         let speed = u.int_in_range(0..=0)?;
-        CarStatus::new(hv,r2d,air1,rf,air2,precharge,speed).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let brake_front_press = u.float_in_range(0_f32..=60_f32)?;
+        let brake_rear_press = u.float_in_range(0_f32..=60_f32)?;
+        CarStatus::new(hv,air1,air2,as_node,rtd_req,running_status,speed,brake_front_press,brake_rear_press).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
+/// Defined values for RunningStatus
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub enum CarStatusRunningStatus {
+    Running,
+    TsReady,
+    PrechargeStarted,
+    SystemOff,
+    _Other(u8),
+}
+
+impl From<CarStatusRunningStatus> for u8 {
+    fn from(val: CarStatusRunningStatus) -> u8 {
+        match val {
+            CarStatusRunningStatus::Running => 3,
+            CarStatusRunningStatus::TsReady => 2,
+            CarStatusRunningStatus::PrechargeStarted => 1,
+            CarStatusRunningStatus::SystemOff => 0,
+            CarStatusRunningStatus::_Other(x) => x,
+        }
+    }
+}
+
 
 /// CarSettings
 ///
@@ -3411,6 +3854,7 @@ pub struct CarSettings {
 
 impl CarSettings {
     pub const MESSAGE_ID: u32 = 102;
+    pub const DLC: u8 = 8;
     
     pub const MAX_REGEN_CURRENT_MIN: u8 = 0_u8;
     pub const MAX_REGEN_CURRENT_MAX: u8 = 150_u8;
@@ -3812,29 +4256,30 @@ impl<'a> Arbitrary<'a> for CarSettings {
     }
 }
 
-/// CheckASB
+/// CheckASBReq
 ///
 /// - ID: 104 (0x68)
 /// - Size: 1 bytes
+/// - Transmitter: VCU
 #[derive(Clone, Copy)]
-pub struct CheckAsb {
+pub struct CheckAsbReq {
     raw: [u8; 1],
 }
 
-impl CheckAsb {
+impl CheckAsbReq {
     pub const MESSAGE_ID: u32 = 104;
+    pub const DLC: u8 = 1;
     
-    pub const RESPONSE_STATUS_MIN: u8 = 0_u8;
-    pub const RESPONSE_STATUS_MAX: u8 = 2_u8;
     
-    /// Construct new CheckASB from values
-    pub fn new(mode: bool) -> Result<Self, CanError> {
+    /// Construct new CheckASBReq from values
+    pub fn new(req: bool, req_ack: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
-        res.set_mode(mode)?;
+        res.set_req(req)?;
+        res.set_req_ack(req_ack)?;
         Ok(res)
     }
     
-    /// Construct new CheckASB from raw
+    /// Construct new CheckASBReq from raw
     pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
         let res = Self { raw };
         Ok(res)
@@ -3845,7 +4290,18 @@ impl CheckAsb {
         &self.raw
     }
     
-    /// Get raw value of Mode
+    /// req
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn req(&self) -> bool {
+        self.req_raw()
+    }
+    
+    /// Get raw value of req
     ///
     /// - Start bit: 0
     /// - Signal size: 1 bits
@@ -3854,28 +4310,57 @@ impl CheckAsb {
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn mode_raw(&self) -> bool {
+    pub fn req_raw(&self) -> bool {
         let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
         
         signal == 1
     }
     
-    pub fn mode(&mut self) -> Result<CheckAsbMode, CanError> {
-        match self.mode_raw() {
-            multiplexor => Err(CanError::InvalidMultiplexor { message_id: 104, multiplexor: multiplexor.into() }),
-        }
-    }
-    /// Set value of Mode
+    /// Set value of req
     #[inline(always)]
-    fn set_mode(&mut self, value: bool) -> Result<(), CanError> {
+    pub fn set_req(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
         self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
         Ok(())
     }
     
+    /// reqAck
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn req_ack(&self) -> bool {
+        self.req_ack_raw()
+    }
+    
+    /// Get raw value of reqAck
+    ///
+    /// - Start bit: 1
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn req_ack_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[1..2].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of reqAck
+    #[inline(always)]
+    pub fn set_req_ack(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[1..2].store_le(value);
+        Ok(())
+    }
+    
 }
 
-impl core::convert::TryFrom<&[u8]> for CheckAsb {
+impl core::convert::TryFrom<&[u8]> for CheckAsbReq {
     type Error = CanError;
     
     #[inline(always)]
@@ -3888,50 +4373,230 @@ impl core::convert::TryFrom<&[u8]> for CheckAsb {
 }
 
 #[cfg(feature = "debug")]
-impl core::fmt::Debug for CheckAsb {
+impl core::fmt::Debug for CheckAsbReq {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
-            f.debug_struct("CheckAsb")
+            f.debug_struct("CheckAsbReq")
+                .field("req", &self.req())
+                .field("req_ack", &self.req_ack())
             .finish()
         } else {
-            f.debug_tuple("CheckAsb").field(&self.raw).finish()
+            f.debug_tuple("CheckAsbReq").field(&self.raw).finish()
         }
     }
 }
 
 #[cfg(feature = "arb")]
-impl<'a> Arbitrary<'a> for CheckAsb {
+impl<'a> Arbitrary<'a> for CheckAsbReq {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
-        let mode = u.int_in_range(0..=1)? == 1;
-        CheckAsb::new(mode).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let req = u.int_in_range(0..=1)? == 1;
+        let req_ack = u.int_in_range(0..=1)? == 1;
+        CheckAsbReq::new(req,req_ack).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
-/// Defined values for response_status
-#[derive(Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub enum CheckAsbResponseStatus {
-    Error,
-    Failure,
-    Success,
-    _Other(u8),
+
+/// EbsBrakeReq
+///
+/// - ID: 105 (0x69)
+/// - Size: 1 bytes
+/// - Transmitter: VCU
+#[derive(Clone, Copy)]
+pub struct EbsBrakeReq {
+    raw: [u8; 1],
 }
 
-impl From<CheckAsbResponseStatus> for u8 {
-    fn from(val: CheckAsbResponseStatus) -> u8 {
-        match val {
-            CheckAsbResponseStatus::Error => 2,
-            CheckAsbResponseStatus::Failure => 1,
-            CheckAsbResponseStatus::Success => 0,
-            CheckAsbResponseStatus::_Other(x) => x,
+impl EbsBrakeReq {
+    pub const MESSAGE_ID: u32 = 105;
+    pub const DLC: u8 = 1;
+    
+    
+    /// Construct new EbsBrakeReq from values
+    pub fn new(req: bool) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 1] };
+        res.set_req(req)?;
+        Ok(res)
+    }
+    
+    /// Construct new EbsBrakeReq from raw
+    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 1] {
+        &self.raw
+    }
+    
+    /// req
+    ///
+    /// - Min: 0
+    /// - Max: 2
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn req(&self) -> bool {
+        self.req_raw()
+    }
+    
+    /// Get raw value of req
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn req_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of req
+    #[inline(always)]
+    pub fn set_req(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for EbsBrakeReq {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 1 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 1];
+        raw.copy_from_slice(&payload[..1]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for EbsBrakeReq {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("EbsBrakeReq")
+                .field("req", &self.req())
+            .finish()
+        } else {
+            f.debug_tuple("EbsBrakeReq").field(&self.raw).finish()
         }
     }
 }
 
-/// Defined values for multiplexed signal CheckASB
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub enum CheckAsbMode {
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for EbsBrakeReq {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let req = u.int_in_range(0..=1)? == 1;
+        EbsBrakeReq::new(req).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
 }
 
+/// ResStatus
+///
+/// - ID: 106 (0x6a)
+/// - Size: 1 bytes
+#[derive(Clone, Copy)]
+pub struct ResStatus {
+    raw: [u8; 1],
+}
+
+impl ResStatus {
+    pub const MESSAGE_ID: u32 = 106;
+    pub const DLC: u8 = 1;
+    
+    
+    /// Construct new ResStatus from values
+    pub fn new(data: bool) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 1] };
+        res.set_data(data)?;
+        Ok(res)
+    }
+    
+    /// Construct new ResStatus from raw
+    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 1] {
+        &self.raw
+    }
+    
+    /// data
+    ///
+    /// - Min: 0
+    /// - Max: 2
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn data(&self) -> bool {
+        self.data_raw()
+    }
+    
+    /// Get raw value of data
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn data_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of data
+    #[inline(always)]
+    pub fn set_data(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for ResStatus {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 1 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 1];
+        raw.copy_from_slice(&payload[..1]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for ResStatus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("ResStatus")
+                .field("data", &self.data())
+            .finish()
+        } else {
+            f.debug_tuple("ResStatus").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for ResStatus {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let data = u.int_in_range(0..=1)? == 1;
+        ResStatus::new(data).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
 
 /// LapStart
 ///
@@ -3945,6 +4610,7 @@ pub struct LapStart {
 
 impl LapStart {
     pub const MESSAGE_ID: u32 = 112;
+    pub const DLC: u8 = 1;
     
     pub const START_MIN: u8 = 0_u8;
     pub const START_MAX: u8 = 1_u8;
@@ -4051,6 +4717,7 @@ pub struct CarMissionStatus {
 
 impl CarMissionStatus {
     pub const MESSAGE_ID: u32 = 113;
+    pub const DLC: u8 = 1;
     
     pub const MISSION_MIN: u8 = 0_u8;
     pub const MISSION_MAX: u8 = 7_u8;
@@ -4346,6 +5013,7 @@ pub struct Temp1 {
 
 impl Temp1 {
     pub const MESSAGE_ID: u32 = 256;
+    pub const DLC: u8 = 8;
     
     pub const TEMP_MOTOR_POST_L_MIN: u16 = 0_u16;
     pub const TEMP_MOTOR_POST_L_MAX: u16 = 0_u16;
@@ -4582,6 +5250,7 @@ pub struct Temp2 {
 
 impl Temp2 {
     pub const MESSAGE_ID: u32 = 257;
+    pub const DLC: u8 = 8;
     
     pub const TEMP_COLD_PRE_L_MIN: u16 = 0_u16;
     pub const TEMP_COLD_PRE_L_MAX: u16 = 0_u16;
@@ -4818,6 +5487,7 @@ pub struct SuspRear {
 
 impl SuspRear {
     pub const MESSAGE_ID: u32 = 258;
+    pub const DLC: u8 = 3;
     
     pub const SUSP_RR_MIN: f32 = 0_f32;
     pub const SUSP_RR_MAX: f32 = 0_f32;
@@ -4983,11 +5653,12 @@ pub struct Reserved2 {
 
 impl Reserved2 {
     pub const MESSAGE_ID: u32 = 259;
+    pub const DLC: u8 = 0;
     
     
     /// Construct new RESERVED2 from values
     pub fn new() -> Result<Self, CanError> {
-        let res = Self { raw: [0u8; 0] };
+        let mut res = Self { raw: [0u8; 0] };
         Ok(res)
     }
     
@@ -5047,6 +5718,7 @@ pub struct SuspFront {
 
 impl SuspFront {
     pub const MESSAGE_ID: u32 = 260;
+    pub const DLC: u8 = 3;
     
     pub const SUSP_FR_MIN: f32 = 0_f32;
     pub const SUSP_FR_MAX: f32 = 0_f32;
@@ -5211,6 +5883,7 @@ pub struct TempFrontR {
 
 impl TempFrontR {
     pub const MESSAGE_ID: u32 = 261;
+    pub const DLC: u8 = 3;
     
     pub const TEMP_MOT_POT_FR_MIN: u16 = 0_u16;
     pub const TEMP_MOT_POT_FR_MAX: u16 = 0_u16;
@@ -5347,6 +6020,169 @@ impl<'a> Arbitrary<'a> for TempFrontR {
     }
 }
 
+/// PressBrake
+///
+/// - ID: 264 (0x108)
+/// - Size: 2 bytes
+/// - Transmitter: SMU
+///
+/// Hydraulic Brakes Pressures
+#[derive(Clone, Copy)]
+pub struct PressBrake {
+    raw: [u8; 2],
+}
+
+impl PressBrake {
+    pub const MESSAGE_ID: u32 = 264;
+    pub const DLC: u8 = 2;
+    
+    pub const PRESS_FRONT_MIN: f32 = 0_f32;
+    pub const PRESS_FRONT_MAX: f32 = 64_f32;
+    pub const PRESS_REAR_MIN: f32 = 0_f32;
+    pub const PRESS_REAR_MAX: f32 = 64_f32;
+    
+    /// Construct new PressBrake from values
+    pub fn new(press_front: f32, press_rear: f32) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 2] };
+        res.set_press_front(press_front)?;
+        res.set_press_rear(press_rear)?;
+        Ok(res)
+    }
+    
+    /// Construct new PressBrake from raw
+    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 2] {
+        &self.raw
+    }
+    
+    /// press_front
+    ///
+    /// - Min: 0
+    /// - Max: 64
+    /// - Unit: "Bar"
+    /// - Receivers: EBS, VCU
+    #[inline(always)]
+    pub fn press_front(&self) -> f32 {
+        self.press_front_raw()
+    }
+    
+    /// Get raw value of press_front
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 8 bits
+    /// - Factor: 0.25
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn press_front_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..8].load_le::<u8>();
+        
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of press_front
+    #[inline(always)]
+    pub fn set_press_front(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 64_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 264 });
+        }
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u8;
+        
+        self.raw.view_bits_mut::<Lsb0>()[0..8].store_le(value);
+        Ok(())
+    }
+    
+    /// press_rear
+    ///
+    /// - Min: 0
+    /// - Max: 64
+    /// - Unit: "Bar"
+    /// - Receivers: EBS, VCU
+    #[inline(always)]
+    pub fn press_rear(&self) -> f32 {
+        self.press_rear_raw()
+    }
+    
+    /// Get raw value of press_rear
+    ///
+    /// - Start bit: 8
+    /// - Signal size: 8 bits
+    /// - Factor: 0.25
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn press_rear_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[8..16].load_le::<u8>();
+        
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of press_rear
+    #[inline(always)]
+    pub fn set_press_rear(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 64_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 264 });
+        }
+        let factor = 0.25_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u8;
+        
+        self.raw.view_bits_mut::<Lsb0>()[8..16].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for PressBrake {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 2 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 2];
+        raw.copy_from_slice(&payload[..2]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for PressBrake {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("PressBrake")
+                .field("press_front", &self.press_front())
+                .field("press_rear", &self.press_rear())
+            .finish()
+        } else {
+            f.debug_tuple("PressBrake").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for PressBrake {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let press_front = u.float_in_range(0_f32..=64_f32)?;
+        let press_rear = u.float_in_range(0_f32..=64_f32)?;
+        PressBrake::new(press_front,press_rear).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
 /// InvVolt
 ///
 /// - ID: 288 (0x120)
@@ -5359,6 +6195,7 @@ pub struct InvVolt {
 
 impl InvVolt {
     pub const MESSAGE_ID: u32 = 288;
+    pub const DLC: u8 = 2;
     
     pub const CAR_VOLTAGE_MIN: u16 = 0_u16;
     pub const CAR_VOLTAGE_MAX: u16 = 600_u16;
@@ -5467,6 +6304,7 @@ pub struct Pcu {
 
 impl Pcu {
     pub const MESSAGE_ID: u32 = 304;
+    pub const DLC: u8 = 7;
     
     pub const MODE_MIN: u8 = 0_u8;
     pub const MODE_MAX: u8 = 2_u8;
@@ -5598,7 +6436,6 @@ impl<'a> Arbitrary<'a> for Pcu {
         Pcu::new(mode).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
-
 /// Defined values for multiplexed signal Pcu
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub enum PcuMode {
@@ -6175,6 +7012,7 @@ pub struct Calib {
 
 impl Calib {
     pub const MESSAGE_ID: u32 = 305;
+    pub const DLC: u8 = 1;
     
     pub const POSITION_MIN: u8 = 0_u8;
     pub const POSITION_MAX: u8 = 1_u8;
@@ -6197,19 +7035,6 @@ impl Calib {
         &self.raw
     }
     
-    /// position
-    ///
-    /// Set calibration of rest value (0) or 100% (1)
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: "high"
-    /// - Receivers: ATC
-    #[inline(always)]
-    pub fn position(&self) -> u8 {
-        self.position_raw()
-    }
-    
     /// Get raw value of position
     ///
     /// - Start bit: 0
@@ -6225,9 +7050,14 @@ impl Calib {
         signal
     }
     
+    pub fn position(&mut self) -> Result<CalibPosition, CanError> {
+        match self.position_raw() {
+            multiplexor => Err(CanError::InvalidMultiplexor { message_id: 305, multiplexor: multiplexor.into() }),
+        }
+    }
     /// Set value of position
     #[inline(always)]
-    pub fn set_position(&mut self, value: u8) -> Result<(), CanError> {
+    fn set_position(&mut self, value: u8) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_u8 || 1_u8 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 305 });
@@ -6255,7 +7085,6 @@ impl core::fmt::Debug for Calib {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             f.debug_struct("Calib")
-                .field("position", &self.position())
             .finish()
         } else {
             f.debug_tuple("Calib").field(&self.raw).finish()
@@ -6270,6 +7099,11 @@ impl<'a> Arbitrary<'a> for Calib {
         Calib::new(position).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
+/// Defined values for multiplexed signal Calib
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub enum CalibPosition {
+}
+
 
 /// CalibAck
 ///
@@ -6283,6 +7117,7 @@ pub struct CalibAck {
 
 impl CalibAck {
     pub const MESSAGE_ID: u32 = 306;
+    pub const DLC: u8 = 1;
     
     pub const POSITION_MIN: u8 = 0_u8;
     pub const POSITION_MAX: u8 = 1_u8;
@@ -6305,17 +7140,6 @@ impl CalibAck {
         &self.raw
     }
     
-    /// position
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: "high"
-    /// - Receivers: SW
-    #[inline(always)]
-    pub fn position(&self) -> u8 {
-        self.position_raw()
-    }
-    
     /// Get raw value of position
     ///
     /// - Start bit: 0
@@ -6331,9 +7155,14 @@ impl CalibAck {
         signal
     }
     
+    pub fn position(&mut self) -> Result<CalibAckPosition, CanError> {
+        match self.position_raw() {
+            multiplexor => Err(CanError::InvalidMultiplexor { message_id: 306, multiplexor: multiplexor.into() }),
+        }
+    }
     /// Set value of position
     #[inline(always)]
-    pub fn set_position(&mut self, value: u8) -> Result<(), CanError> {
+    fn set_position(&mut self, value: u8) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_u8 || 1_u8 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 306 });
@@ -6361,7 +7190,6 @@ impl core::fmt::Debug for CalibAck {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             f.debug_struct("CalibAck")
-                .field("position", &self.position())
             .finish()
         } else {
             f.debug_tuple("CalibAck").field(&self.raw).finish()
@@ -6376,6 +7204,11 @@ impl<'a> Arbitrary<'a> for CalibAck {
         CalibAck::new(position).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
+/// Defined values for multiplexed signal CalibAck
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub enum CalibAckPosition {
+}
+
 
 /// PcuSwControl
 ///
@@ -6389,6 +7222,7 @@ pub struct PcuSwControl {
 
 impl PcuSwControl {
     pub const MESSAGE_ID: u32 = 307;
+    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuSwControl from values
@@ -6577,6 +7411,7 @@ pub struct PcuRfAck {
 
 impl PcuRfAck {
     pub const MESSAGE_ID: u32 = 308;
+    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuRfAck from values
@@ -6666,6 +7501,71 @@ impl<'a> Arbitrary<'a> for PcuRfAck {
     }
 }
 
+/// EmbeddedAliveCheck
+///
+/// - ID: 310 (0x136)
+/// - Size: 0 bytes
+/// - Transmitter: VCU
+#[derive(Clone, Copy)]
+pub struct EmbeddedAliveCheck {
+    raw: [u8; 0],
+}
+
+impl EmbeddedAliveCheck {
+    pub const MESSAGE_ID: u32 = 310;
+    pub const DLC: u8 = 0;
+    
+    
+    /// Construct new EmbeddedAliveCheck from values
+    pub fn new() -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 0] };
+        Ok(res)
+    }
+    
+    /// Construct new EmbeddedAliveCheck from raw
+    pub fn new_from_raw(raw: [u8;0] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 0] {
+        &self.raw
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for EmbeddedAliveCheck {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() != 0 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 0];
+        raw.copy_from_slice(&payload[..0]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for EmbeddedAliveCheck {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("EmbeddedAliveCheck")
+            .finish()
+        } else {
+            f.debug_tuple("EmbeddedAliveCheck").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for EmbeddedAliveCheck {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        EmbeddedAliveCheck::new().map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
 /// Lem
 ///
 /// - ID: 962 (0x3c2)
@@ -6678,6 +7578,7 @@ pub struct Lem {
 
 impl Lem {
     pub const MESSAGE_ID: u32 = 962;
+    pub const DLC: u8 = 8;
     
     pub const CURRENT_MIN: f32 = 0_f32;
     pub const CURRENT_MAX: f32 = 0_f32;
@@ -6836,3 +7737,4 @@ impl UnstructuredFloatExt for arbitrary::Unstructured<'_> {
         Ok(random)
     }
 }
+
