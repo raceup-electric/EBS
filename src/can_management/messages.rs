@@ -157,19 +157,12 @@ pub struct ResGo {
 
 impl ResGo {
     pub const MESSAGE_ID: u32 = 32;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new ResGO from values
     pub fn new(go_signal: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_go_signal(go_signal)?;
-        Ok(res)
-    }
-    
-    /// Construct new ResGO from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -250,43 +243,39 @@ impl<'a> Arbitrary<'a> for ResGo {
 /// EbsStatus
 ///
 /// - ID: 60 (0x3c)
-/// - Size: 2 bytes
+/// - Size: 5 bytes
 /// - Transmitter: EBS
 #[derive(Clone, Copy)]
 pub struct EbsStatus {
-    raw: [u8; 2],
+    raw: [u8; 5],
 }
 
 impl EbsStatus {
     pub const MESSAGE_ID: u32 = 60;
-    pub const DLC: u8 = 2;
     
-    pub const PRESS_LEFT_TANK_MIN: f32 = 6_f32;
+    pub const PRESS_LEFT_TANK_MIN: f32 = 0_f32;
     pub const PRESS_LEFT_TANK_MAX: f32 = 10_f32;
-    pub const PRESS_RIGHT_TANK_MIN: f32 = 6_f32;
+    pub const PRESS_RIGHT_TANK_MIN: f32 = 0_f32;
     pub const PRESS_RIGHT_TANK_MAX: f32 = 10_f32;
     
     /// Construct new EbsStatus from values
-    pub fn new(system_check: bool, press_left_tank: f32, press_right_tank: f32, sanity_left_sensor: bool, sanity_right_sensor: bool, asb_check: bool, brakes_engaged: bool) -> Result<Self, CanError> {
-        let mut res = Self { raw: [0u8; 2] };
+    pub fn new(system_check: bool, sanity_left_sensor: bool, sanity_right_sensor: bool, asb_check: bool, brakes_engaged: bool, brake_consistency: bool, tank_brake_coherence: bool, xnot_in_use: bool, press_left_tank: f32, press_right_tank: f32) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 5] };
         res.set_system_check(system_check)?;
-        res.set_press_left_tank(press_left_tank)?;
-        res.set_press_right_tank(press_right_tank)?;
         res.set_sanity_left_sensor(sanity_left_sensor)?;
         res.set_sanity_right_sensor(sanity_right_sensor)?;
         res.set_asb_check(asb_check)?;
         res.set_brakes_engaged(brakes_engaged)?;
-        Ok(res)
-    }
-    
-    /// Construct new EbsStatus from raw
-    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
-        let res = Self { raw };
+        res.set_brake_consistency(brake_consistency)?;
+        res.set_tank_brake_coherence(tank_brake_coherence)?;
+        res.set_xnot_in_use(xnot_in_use)?;
+        res.set_press_left_tank(press_left_tank)?;
+        res.set_press_right_tank(press_right_tank)?;
         Ok(res)
     }
     
     /// Access message payload raw value
-    pub fn raw(&self) -> &[u8; 2] {
+    pub fn raw(&self) -> &[u8; 5] {
         &self.raw
     }
     
@@ -324,92 +313,6 @@ impl EbsStatus {
         Ok(())
     }
     
-    /// press_left_tank
-    ///
-    /// - Min: 6
-    /// - Max: 10
-    /// - Unit: "Bar"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn press_left_tank(&self) -> f32 {
-        self.press_left_tank_raw()
-    }
-    
-    /// Get raw value of press_left_tank
-    ///
-    /// - Start bit: 1
-    /// - Signal size: 5 bits
-    /// - Factor: 0.25
-    /// - Offset: 6
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn press_left_tank_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[1..6].load_le::<u8>();
-        
-        let factor = 0.25_f32;
-        let offset = 6_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of press_left_tank
-    #[inline(always)]
-    pub fn set_press_left_tank(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 6_f32 || 10_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 60 });
-        }
-        let factor = 0.25_f32;
-        let offset = 6_f32;
-        let value = ((value - offset) / factor) as u8;
-        
-        self.raw.view_bits_mut::<Lsb0>()[1..6].store_le(value);
-        Ok(())
-    }
-    
-    /// press_right_tank
-    ///
-    /// - Min: 6
-    /// - Max: 10
-    /// - Unit: "Bar"
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn press_right_tank(&self) -> f32 {
-        self.press_right_tank_raw()
-    }
-    
-    /// Get raw value of press_right_tank
-    ///
-    /// - Start bit: 6
-    /// - Signal size: 5 bits
-    /// - Factor: 0.25
-    /// - Offset: 6
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn press_right_tank_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[6..11].load_le::<u8>();
-        
-        let factor = 0.25_f32;
-        let offset = 6_f32;
-        (signal as f32) * factor + offset
-    }
-    
-    /// Set value of press_right_tank
-    #[inline(always)]
-    pub fn set_press_right_tank(&mut self, value: f32) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 6_f32 || 10_f32 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 60 });
-        }
-        let factor = 0.25_f32;
-        let offset = 6_f32;
-        let value = ((value - offset) / factor) as u8;
-        
-        self.raw.view_bits_mut::<Lsb0>()[6..11].store_le(value);
-        Ok(())
-    }
-    
     /// sanity_left_sensor
     ///
     /// - Min: 0
@@ -423,7 +326,7 @@ impl EbsStatus {
     
     /// Get raw value of sanity_left_sensor
     ///
-    /// - Start bit: 11
+    /// - Start bit: 1
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -431,7 +334,7 @@ impl EbsStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn sanity_left_sensor_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[11..12].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[1..2].load_le::<u8>();
         
         signal == 1
     }
@@ -440,7 +343,7 @@ impl EbsStatus {
     #[inline(always)]
     pub fn set_sanity_left_sensor(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[11..12].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[1..2].store_le(value);
         Ok(())
     }
     
@@ -457,7 +360,7 @@ impl EbsStatus {
     
     /// Get raw value of sanity_right_sensor
     ///
-    /// - Start bit: 12
+    /// - Start bit: 2
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -465,7 +368,7 @@ impl EbsStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn sanity_right_sensor_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[12..13].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[2..3].load_le::<u8>();
         
         signal == 1
     }
@@ -474,7 +377,7 @@ impl EbsStatus {
     #[inline(always)]
     pub fn set_sanity_right_sensor(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[12..13].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[2..3].store_le(value);
         Ok(())
     }
     
@@ -491,7 +394,7 @@ impl EbsStatus {
     
     /// Get raw value of ASB_check
     ///
-    /// - Start bit: 13
+    /// - Start bit: 3
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -499,7 +402,7 @@ impl EbsStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn asb_check_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[13..14].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[3..4].load_le::<u8>();
         
         signal == 1
     }
@@ -508,7 +411,7 @@ impl EbsStatus {
     #[inline(always)]
     pub fn set_asb_check(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[13..14].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[3..4].store_le(value);
         Ok(())
     }
     
@@ -525,7 +428,7 @@ impl EbsStatus {
     
     /// Get raw value of brakes_engaged
     ///
-    /// - Start bit: 14
+    /// - Start bit: 4
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -533,7 +436,7 @@ impl EbsStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn brakes_engaged_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[14..15].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
         
         signal == 1
     }
@@ -542,7 +445,195 @@ impl EbsStatus {
     #[inline(always)]
     pub fn set_brakes_engaged(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[14..15].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
+        Ok(())
+    }
+    
+    /// brake_consistency
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn brake_consistency(&self) -> bool {
+        self.brake_consistency_raw()
+    }
+    
+    /// Get raw value of brake_consistency
+    ///
+    /// - Start bit: 5
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn brake_consistency_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[5..6].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of brake_consistency
+    #[inline(always)]
+    pub fn set_brake_consistency(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[5..6].store_le(value);
+        Ok(())
+    }
+    
+    /// tank_brake_coherence
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn tank_brake_coherence(&self) -> bool {
+        self.tank_brake_coherence_raw()
+    }
+    
+    /// Get raw value of tank_brake_coherence
+    ///
+    /// - Start bit: 6
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn tank_brake_coherence_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[6..7].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of tank_brake_coherence
+    #[inline(always)]
+    pub fn set_tank_brake_coherence(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[6..7].store_le(value);
+        Ok(())
+    }
+    
+    /// _NOT_IN_USE
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn xnot_in_use(&self) -> bool {
+        self.xnot_in_use_raw()
+    }
+    
+    /// Get raw value of _NOT_IN_USE
+    ///
+    /// - Start bit: 7
+    /// - Signal size: 1 bits
+    /// - Factor: 0
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn xnot_in_use_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[7..8].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of _NOT_IN_USE
+    #[inline(always)]
+    pub fn set_xnot_in_use(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[7..8].store_le(value);
+        Ok(())
+    }
+    
+    /// press_left_tank
+    ///
+    /// - Min: 0
+    /// - Max: 10
+    /// - Unit: "Bar"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn press_left_tank(&self) -> f32 {
+        self.press_left_tank_raw()
+    }
+    
+    /// Get raw value of press_left_tank
+    ///
+    /// - Start bit: 8
+    /// - Signal size: 16 bits
+    /// - Factor: 0.001
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn press_left_tank_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[8..24].load_le::<u16>();
+        
+        let factor = 0.001_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of press_left_tank
+    #[inline(always)]
+    pub fn set_press_left_tank(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 10_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 60 });
+        }
+        let factor = 0.001_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u16;
+        
+        self.raw.view_bits_mut::<Lsb0>()[8..24].store_le(value);
+        Ok(())
+    }
+    
+    /// press_right_tank
+    ///
+    /// - Min: 0
+    /// - Max: 10
+    /// - Unit: "Bar"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn press_right_tank(&self) -> f32 {
+        self.press_right_tank_raw()
+    }
+    
+    /// Get raw value of press_right_tank
+    ///
+    /// - Start bit: 24
+    /// - Signal size: 16 bits
+    /// - Factor: 0.001
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn press_right_tank_raw(&self) -> f32 {
+        let signal = self.raw.view_bits::<Lsb0>()[24..40].load_le::<u16>();
+        
+        let factor = 0.001_f32;
+        let offset = 0_f32;
+        (signal as f32) * factor + offset
+    }
+    
+    /// Set value of press_right_tank
+    #[inline(always)]
+    pub fn set_press_right_tank(&mut self, value: f32) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_f32 || 10_f32 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 60 });
+        }
+        let factor = 0.001_f32;
+        let offset = 0_f32;
+        let value = ((value - offset) / factor) as u16;
+        
+        self.raw.view_bits_mut::<Lsb0>()[24..40].store_le(value);
         Ok(())
     }
     
@@ -553,9 +644,9 @@ impl core::convert::TryFrom<&[u8]> for EbsStatus {
     
     #[inline(always)]
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
-        if payload.len() != 2 { return Err(CanError::InvalidPayloadSize); }
-        let mut raw = [0u8; 2];
-        raw.copy_from_slice(&payload[..2]);
+        if payload.len() != 5 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 5];
+        raw.copy_from_slice(&payload[..5]);
         Ok(Self { raw })
     }
 }
@@ -566,12 +657,15 @@ impl core::fmt::Debug for EbsStatus {
         if f.alternate() {
             f.debug_struct("EbsStatus")
                 .field("system_check", &self.system_check())
-                .field("press_left_tank", &self.press_left_tank())
-                .field("press_right_tank", &self.press_right_tank())
                 .field("sanity_left_sensor", &self.sanity_left_sensor())
                 .field("sanity_right_sensor", &self.sanity_right_sensor())
                 .field("asb_check", &self.asb_check())
                 .field("brakes_engaged", &self.brakes_engaged())
+                .field("brake_consistency", &self.brake_consistency())
+                .field("tank_brake_coherence", &self.tank_brake_coherence())
+                .field("xnot_in_use", &self.xnot_in_use())
+                .field("press_left_tank", &self.press_left_tank())
+                .field("press_right_tank", &self.press_right_tank())
             .finish()
         } else {
             f.debug_tuple("EbsStatus").field(&self.raw).finish()
@@ -583,13 +677,16 @@ impl core::fmt::Debug for EbsStatus {
 impl<'a> Arbitrary<'a> for EbsStatus {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let system_check = u.int_in_range(0..=1)? == 1;
-        let press_left_tank = u.float_in_range(6_f32..=10_f32)?;
-        let press_right_tank = u.float_in_range(6_f32..=10_f32)?;
         let sanity_left_sensor = u.int_in_range(0..=1)? == 1;
         let sanity_right_sensor = u.int_in_range(0..=1)? == 1;
         let asb_check = u.int_in_range(0..=1)? == 1;
         let brakes_engaged = u.int_in_range(0..=1)? == 1;
-        EbsStatus::new(system_check,press_left_tank,press_right_tank,sanity_left_sensor,sanity_right_sensor,asb_check,brakes_engaged).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let brake_consistency = u.int_in_range(0..=1)? == 1;
+        let tank_brake_coherence = u.int_in_range(0..=1)? == 1;
+        let xnot_in_use = u.int_in_range(0..=1)? == 1;
+        let press_left_tank = u.float_in_range(0_f32..=10_f32)?;
+        let press_right_tank = u.float_in_range(0_f32..=10_f32)?;
+        EbsStatus::new(system_check,sanity_left_sensor,sanity_right_sensor,asb_check,brakes_engaged,brake_consistency,tank_brake_coherence,xnot_in_use,press_left_tank,press_right_tank).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -605,19 +702,12 @@ pub struct Asms {
 
 impl Asms {
     pub const MESSAGE_ID: u32 = 65;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new Asms from values
     pub fn new(asms_sens: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_asms_sens(asms_sens)?;
-        Ok(res)
-    }
-    
-    /// Construct new Asms from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -707,7 +797,6 @@ pub struct CarMission {
 
 impl CarMission {
     pub const MESSAGE_ID: u32 = 71;
-    pub const DLC: u8 = 1;
     
     pub const MISSION_MIN: u8 = 0_u8;
     pub const MISSION_MAX: u8 = 7_u8;
@@ -716,12 +805,6 @@ impl CarMission {
     pub fn new(mission: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_mission(mission)?;
-        Ok(res)
-    }
-    
-    /// Construct new CarMission from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -857,7 +940,6 @@ pub struct PcuFault {
 
 impl PcuFault {
     pub const MESSAGE_ID: u32 = 81;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuFault from values
@@ -870,12 +952,6 @@ impl PcuFault {
         res.set_fault_pumpr(fault_pumpr)?;
         res.set_fault_fanbattr(fault_fanbattr)?;
         res.set_fault_fanbattl(fault_fanbattl)?;
-        Ok(res)
-    }
-    
-    /// Construct new PcuFault from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -1181,7 +1257,6 @@ pub struct Paddle {
 
 impl Paddle {
     pub const MESSAGE_ID: u32 = 82;
-    pub const DLC: u8 = 1;
     
     pub const REGEN_MIN: u8 = 0_u8;
     pub const REGEN_MAX: u8 = 100_u8;
@@ -1190,12 +1265,6 @@ impl Paddle {
     pub fn new(regen: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_regen(regen)?;
-        Ok(res)
-    }
-    
-    /// Construct new Paddle from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -1290,7 +1359,6 @@ pub struct Driver {
 
 impl Driver {
     pub const MESSAGE_ID: u32 = 83;
-    pub const DLC: u8 = 4;
     
     pub const THROTTLE_MIN: u8 = 0_u8;
     pub const THROTTLE_MAX: u8 = 100_u8;
@@ -1309,12 +1377,6 @@ impl Driver {
         res.set_bre_implausibility(bre_implausibility)?;
         res.set_pad_implausibility(pad_implausibility)?;
         res.set_pot_implausibility(pot_implausibility)?;
-        Ok(res)
-    }
-    
-    /// Construct new Driver from raw
-    pub fn new_from_raw(raw: [u8;4] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -1637,7 +1699,6 @@ pub struct BmsLv1 {
 
 impl BmsLv1 {
     pub const MESSAGE_ID: u32 = 84;
-    pub const DLC: u8 = 7;
     
     pub const MAX_VOLT_MIN: f32 = 0_f32;
     pub const MAX_VOLT_MAX: f32 = 0_f32;
@@ -1655,12 +1716,6 @@ impl BmsLv1 {
         res.set_min_volt(min_volt)?;
         res.set_avg_volt(avg_volt)?;
         res.set_soc(soc)?;
-        Ok(res)
-    }
-    
-    /// Construct new BmsLv1 from raw
-    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -1888,7 +1943,6 @@ pub struct BmsLv2 {
 
 impl BmsLv2 {
     pub const MESSAGE_ID: u32 = 85;
-    pub const DLC: u8 = 7;
     
     pub const MAX_TEMP_MIN: u16 = 0_u16;
     pub const MAX_TEMP_MAX: u16 = 0_u16;
@@ -1906,12 +1960,6 @@ impl BmsLv2 {
         res.set_min_temp(min_temp)?;
         res.set_avg_temp(avg_temp)?;
         res.set_fan_speed(fan_speed)?;
-        Ok(res)
-    }
-    
-    /// Construct new BmsLv2 from raw
-    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -2121,7 +2169,6 @@ pub struct BmsHv1 {
 
 impl BmsHv1 {
     pub const MESSAGE_ID: u32 = 87;
-    pub const DLC: u8 = 7;
     
     pub const MAX_VOLT_MIN: f32 = 0_f32;
     pub const MAX_VOLT_MAX: f32 = 0_f32;
@@ -2139,12 +2186,6 @@ impl BmsHv1 {
         res.set_min_volt(min_volt)?;
         res.set_avg_volt(avg_volt)?;
         res.set_soc(soc)?;
-        Ok(res)
-    }
-    
-    /// Construct new BmsHv1 from raw
-    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -2380,7 +2421,6 @@ pub struct BmsHv2 {
 
 impl BmsHv2 {
     pub const MESSAGE_ID: u32 = 88;
-    pub const DLC: u8 = 7;
     
     pub const MAX_TEMP_MIN: u16 = 0_u16;
     pub const MAX_TEMP_MAX: u16 = 0_u16;
@@ -2398,12 +2438,6 @@ impl BmsHv2 {
         res.set_min_temp(min_temp)?;
         res.set_avg_temp(avg_temp)?;
         res.set_fan_speed(fan_speed)?;
-        Ok(res)
-    }
-    
-    /// Construct new BmsHv2 from raw
-    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -2621,7 +2655,6 @@ pub struct Imu1 {
 
 impl Imu1 {
     pub const MESSAGE_ID: u32 = 96;
-    pub const DLC: u8 = 8;
     
     pub const ACC_X_MIN: i32 = 0_i32;
     pub const ACC_X_MAX: i32 = 0_i32;
@@ -2633,12 +2666,6 @@ impl Imu1 {
         let mut res = Self { raw: [0u8; 8] };
         res.set_acc_x(acc_x)?;
         res.set_acc_y(acc_y)?;
-        Ok(res)
-    }
-    
-    /// Construct new Imu1 from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -2778,7 +2805,6 @@ pub struct Imu2 {
 
 impl Imu2 {
     pub const MESSAGE_ID: u32 = 97;
-    pub const DLC: u8 = 8;
     
     pub const ACC_Z_MIN: i32 = 0_i32;
     pub const ACC_Z_MAX: i32 = 0_i32;
@@ -2790,12 +2816,6 @@ impl Imu2 {
         let mut res = Self { raw: [0u8; 8] };
         res.set_acc_z(acc_z)?;
         res.set_omega_x(omega_x)?;
-        Ok(res)
-    }
-    
-    /// Construct new Imu2 from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -2935,7 +2955,6 @@ pub struct Imu3 {
 
 impl Imu3 {
     pub const MESSAGE_ID: u32 = 98;
-    pub const DLC: u8 = 8;
     
     pub const OMEGA_Y_MIN: i32 = 0_i32;
     pub const OMEGA_Y_MAX: i32 = 0_i32;
@@ -2947,12 +2966,6 @@ impl Imu3 {
         let mut res = Self { raw: [0u8; 8] };
         res.set_omega_y(omega_y)?;
         res.set_omega_z(omega_z)?;
-        Ok(res)
-    }
-    
-    /// Construct new Imu3 from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -3094,19 +3107,12 @@ pub struct ImuCalib {
 
 impl ImuCalib {
     pub const MESSAGE_ID: u32 = 99;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new IMUCalib from values
     pub fn new(start_imu_calibration: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_start_imu_calibration(start_imu_calibration)?;
-        Ok(res)
-    }
-    
-    /// Construct new IMUCalib from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -3196,7 +3202,6 @@ pub struct Map {
 
 impl Map {
     pub const MESSAGE_ID: u32 = 100;
-    pub const DLC: u8 = 2;
     
     pub const POWER_MIN: u8 = 1_u8;
     pub const POWER_MAX: u8 = 12_u8;
@@ -3211,12 +3216,6 @@ impl Map {
         res.set_power(power)?;
         res.set_regen(regen)?;
         res.set_torque_rep(torque_rep)?;
-        Ok(res)
-    }
-    
-    /// Construct new Map from raw
-    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -3393,7 +3392,6 @@ pub struct CarStatus {
 
 impl CarStatus {
     pub const MESSAGE_ID: u32 = 101;
-    pub const DLC: u8 = 4;
     
     pub const RUNNING_STATUS_MIN: u8 = 0_u8;
     pub const RUNNING_STATUS_MAX: u8 = 3_u8;
@@ -3416,12 +3414,6 @@ impl CarStatus {
         res.set_speed(speed)?;
         res.set_brake_front_press(brake_front_press)?;
         res.set_brake_rear_press(brake_rear_press)?;
-        Ok(res)
-    }
-    
-    /// Construct new CarStatus from raw
-    pub fn new_from_raw(raw: [u8;4] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -3854,7 +3846,6 @@ pub struct CarSettings {
 
 impl CarSettings {
     pub const MESSAGE_ID: u32 = 102;
-    pub const DLC: u8 = 8;
     
     pub const MAX_REGEN_CURRENT_MIN: u8 = 0_u8;
     pub const MAX_REGEN_CURRENT_MAX: u8 = 150_u8;
@@ -3882,12 +3873,6 @@ impl CarSettings {
         res.set_front_motor_repartition(front_motor_repartition)?;
         res.set_rear_motor_repartition(rear_motor_repartition)?;
         res.set_torque_vectoring(torque_vectoring)?;
-        Ok(res)
-    }
-    
-    /// Construct new CarSettings from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -4268,7 +4253,6 @@ pub struct CheckAsbReq {
 
 impl CheckAsbReq {
     pub const MESSAGE_ID: u32 = 104;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new CheckASBReq from values
@@ -4276,12 +4260,6 @@ impl CheckAsbReq {
         let mut res = Self { raw: [0u8; 1] };
         res.set_req(req)?;
         res.set_req_ack(req_ack)?;
-        Ok(res)
-    }
-    
-    /// Construct new CheckASBReq from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -4407,19 +4385,12 @@ pub struct EbsBrakeReq {
 
 impl EbsBrakeReq {
     pub const MESSAGE_ID: u32 = 105;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new EbsBrakeReq from values
     pub fn new(req: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_req(req)?;
-        Ok(res)
-    }
-    
-    /// Construct new EbsBrakeReq from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -4508,19 +4479,12 @@ pub struct ResStatus {
 
 impl ResStatus {
     pub const MESSAGE_ID: u32 = 106;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new ResStatus from values
     pub fn new(data: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_data(data)?;
-        Ok(res)
-    }
-    
-    /// Construct new ResStatus from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -4610,7 +4574,6 @@ pub struct LapStart {
 
 impl LapStart {
     pub const MESSAGE_ID: u32 = 112;
-    pub const DLC: u8 = 1;
     
     pub const START_MIN: u8 = 0_u8;
     pub const START_MAX: u8 = 1_u8;
@@ -4619,12 +4582,6 @@ impl LapStart {
     pub fn new(start: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_start(start)?;
-        Ok(res)
-    }
-    
-    /// Construct new LapStart from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -4717,7 +4674,6 @@ pub struct CarMissionStatus {
 
 impl CarMissionStatus {
     pub const MESSAGE_ID: u32 = 113;
-    pub const DLC: u8 = 1;
     
     pub const MISSION_MIN: u8 = 0_u8;
     pub const MISSION_MAX: u8 = 7_u8;
@@ -4732,12 +4688,6 @@ impl CarMissionStatus {
         res.set_mission(mission)?;
         res.set_mission_status(mission_status)?;
         res.set_as_status(as_status)?;
-        Ok(res)
-    }
-    
-    /// Construct new CarMissionStatus from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5013,7 +4963,6 @@ pub struct Temp1 {
 
 impl Temp1 {
     pub const MESSAGE_ID: u32 = 256;
-    pub const DLC: u8 = 8;
     
     pub const TEMP_MOTOR_POST_L_MIN: u16 = 0_u16;
     pub const TEMP_MOTOR_POST_L_MAX: u16 = 0_u16;
@@ -5031,12 +4980,6 @@ impl Temp1 {
         res.set_temp_motor_pre_l(temp_motor_pre_l)?;
         res.set_temp_motor_pre_r(temp_motor_pre_r)?;
         res.set_temp_coldplate_pre_r(temp_coldplate_pre_r)?;
-        Ok(res)
-    }
-    
-    /// Construct new Temp1 from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5250,7 +5193,6 @@ pub struct Temp2 {
 
 impl Temp2 {
     pub const MESSAGE_ID: u32 = 257;
-    pub const DLC: u8 = 8;
     
     pub const TEMP_COLD_PRE_L_MIN: u16 = 0_u16;
     pub const TEMP_COLD_PRE_L_MAX: u16 = 0_u16;
@@ -5268,12 +5210,6 @@ impl Temp2 {
         res.set_temp_cold_post_r(temp_cold_post_r)?;
         res.set_temp_cold_post_l(temp_cold_post_l)?;
         res.set_temp_mot_post_r(temp_mot_post_r)?;
-        Ok(res)
-    }
-    
-    /// Construct new Temp2 from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5487,7 +5423,6 @@ pub struct SuspRear {
 
 impl SuspRear {
     pub const MESSAGE_ID: u32 = 258;
-    pub const DLC: u8 = 3;
     
     pub const SUSP_RR_MIN: f32 = 0_f32;
     pub const SUSP_RR_MAX: f32 = 0_f32;
@@ -5499,12 +5434,6 @@ impl SuspRear {
         let mut res = Self { raw: [0u8; 3] };
         res.set_susp_rr(susp_rr)?;
         res.set_susp_rl(susp_rl)?;
-        Ok(res)
-    }
-    
-    /// Construct new SuspRear from raw
-    pub fn new_from_raw(raw: [u8;3] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5653,18 +5582,11 @@ pub struct Reserved2 {
 
 impl Reserved2 {
     pub const MESSAGE_ID: u32 = 259;
-    pub const DLC: u8 = 0;
     
     
     /// Construct new RESERVED2 from values
     pub fn new() -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 0] };
-        Ok(res)
-    }
-    
-    /// Construct new RESERVED2 from raw
-    pub fn new_from_raw(raw: [u8;0] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5718,7 +5640,6 @@ pub struct SuspFront {
 
 impl SuspFront {
     pub const MESSAGE_ID: u32 = 260;
-    pub const DLC: u8 = 3;
     
     pub const SUSP_FR_MIN: f32 = 0_f32;
     pub const SUSP_FR_MAX: f32 = 0_f32;
@@ -5730,12 +5651,6 @@ impl SuspFront {
         let mut res = Self { raw: [0u8; 3] };
         res.set_susp_fr(susp_fr)?;
         res.set_susp_fl(susp_fl)?;
-        Ok(res)
-    }
-    
-    /// Construct new SuspFront from raw
-    pub fn new_from_raw(raw: [u8;3] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -5883,7 +5798,6 @@ pub struct TempFrontR {
 
 impl TempFrontR {
     pub const MESSAGE_ID: u32 = 261;
-    pub const DLC: u8 = 3;
     
     pub const TEMP_MOT_POT_FR_MIN: u16 = 0_u16;
     pub const TEMP_MOT_POT_FR_MAX: u16 = 0_u16;
@@ -5895,12 +5809,6 @@ impl TempFrontR {
         let mut res = Self { raw: [0u8; 3] };
         res.set_temp_mot_pot_fr(temp_mot_pot_fr)?;
         res.set_temp_mot_pre_fr(temp_mot_pre_fr)?;
-        Ok(res)
-    }
-    
-    /// Construct new TempFrontR from raw
-    pub fn new_from_raw(raw: [u8;3] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -6034,7 +5942,6 @@ pub struct PressBrake {
 
 impl PressBrake {
     pub const MESSAGE_ID: u32 = 264;
-    pub const DLC: u8 = 2;
     
     pub const PRESS_FRONT_MIN: f32 = 0_f32;
     pub const PRESS_FRONT_MAX: f32 = 64_f32;
@@ -6046,12 +5953,6 @@ impl PressBrake {
         let mut res = Self { raw: [0u8; 2] };
         res.set_press_front(press_front)?;
         res.set_press_rear(press_rear)?;
-        Ok(res)
-    }
-    
-    /// Construct new PressBrake from raw
-    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -6195,7 +6096,6 @@ pub struct InvVolt {
 
 impl InvVolt {
     pub const MESSAGE_ID: u32 = 288;
-    pub const DLC: u8 = 2;
     
     pub const CAR_VOLTAGE_MIN: u16 = 0_u16;
     pub const CAR_VOLTAGE_MAX: u16 = 600_u16;
@@ -6204,12 +6104,6 @@ impl InvVolt {
     pub fn new(car_voltage: u16) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 2] };
         res.set_car_voltage(car_voltage)?;
-        Ok(res)
-    }
-    
-    /// Construct new InvVolt from raw
-    pub fn new_from_raw(raw: [u8;2] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -6304,7 +6198,6 @@ pub struct Pcu {
 
 impl Pcu {
     pub const MESSAGE_ID: u32 = 304;
-    pub const DLC: u8 = 7;
     
     pub const MODE_MIN: u8 = 0_u8;
     pub const MODE_MAX: u8 = 2_u8;
@@ -6325,12 +6218,6 @@ impl Pcu {
     pub fn new(mode: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 7] };
         res.set_mode(mode)?;
-        Ok(res)
-    }
-    
-    /// Construct new Pcu from raw
-    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -6450,7 +6337,6 @@ pub struct PcuModeM0 { raw: [u8; 7] }
 
 impl PcuModeM0 {
 pub fn new() -> Self { Self { raw: [0u8; 7] } }
-pub fn new_from_raw(raw: [u8; 7]) -> Self { Self { raw } }
 /// pump_enable_left
 ///
 /// - Min: 0
@@ -6885,7 +6771,6 @@ pub struct PcuModeM1 { raw: [u8; 7] }
 
 impl PcuModeM1 {
 pub fn new() -> Self { Self { raw: [0u8; 7] } }
-pub fn new_from_raw(raw: [u8; 7]) -> Self { Self { raw } }
 /// rf
 ///
 /// - Min: 0
@@ -6928,7 +6813,6 @@ pub struct PcuModeM2 { raw: [u8; 7] }
 
 impl PcuModeM2 {
 pub fn new() -> Self { Self { raw: [0u8; 7] } }
-pub fn new_from_raw(raw: [u8; 7]) -> Self { Self { raw } }
 /// enable_dv
 ///
 /// - Min: 0
@@ -7012,7 +6896,6 @@ pub struct Calib {
 
 impl Calib {
     pub const MESSAGE_ID: u32 = 305;
-    pub const DLC: u8 = 1;
     
     pub const POSITION_MIN: u8 = 0_u8;
     pub const POSITION_MAX: u8 = 1_u8;
@@ -7021,12 +6904,6 @@ impl Calib {
     pub fn new(position: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_position(position)?;
-        Ok(res)
-    }
-    
-    /// Construct new Calib from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -7117,7 +6994,6 @@ pub struct CalibAck {
 
 impl CalibAck {
     pub const MESSAGE_ID: u32 = 306;
-    pub const DLC: u8 = 1;
     
     pub const POSITION_MIN: u8 = 0_u8;
     pub const POSITION_MAX: u8 = 1_u8;
@@ -7126,12 +7002,6 @@ impl CalibAck {
     pub fn new(position: u8) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_position(position)?;
-        Ok(res)
-    }
-    
-    /// Construct new CalibAck from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -7222,7 +7092,6 @@ pub struct PcuSwControl {
 
 impl PcuSwControl {
     pub const MESSAGE_ID: u32 = 307;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuSwControl from values
@@ -7230,12 +7099,6 @@ impl PcuSwControl {
         let mut res = Self { raw: [0u8; 1] };
         res.set_pump(pump)?;
         res.set_fan(fan)?;
-        Ok(res)
-    }
-    
-    /// Construct new PcuSwControl from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -7411,19 +7274,12 @@ pub struct PcuRfAck {
 
 impl PcuRfAck {
     pub const MESSAGE_ID: u32 = 308;
-    pub const DLC: u8 = 1;
     
     
     /// Construct new PcuRfAck from values
     pub fn new(rf_signal_ack: bool) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 1] };
         res.set_rf_signal_ack(rf_signal_ack)?;
-        Ok(res)
-    }
-    
-    /// Construct new PcuRfAck from raw
-    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -7513,18 +7369,11 @@ pub struct EmbeddedAliveCheck {
 
 impl EmbeddedAliveCheck {
     pub const MESSAGE_ID: u32 = 310;
-    pub const DLC: u8 = 0;
     
     
     /// Construct new EmbeddedAliveCheck from values
     pub fn new() -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 0] };
-        Ok(res)
-    }
-    
-    /// Construct new EmbeddedAliveCheck from raw
-    pub fn new_from_raw(raw: [u8;0] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
@@ -7578,7 +7427,6 @@ pub struct Lem {
 
 impl Lem {
     pub const MESSAGE_ID: u32 = 962;
-    pub const DLC: u8 = 8;
     
     pub const CURRENT_MIN: f32 = 0_f32;
     pub const CURRENT_MAX: f32 = 0_f32;
@@ -7587,12 +7435,6 @@ impl Lem {
     pub fn new(current: f32) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 8] };
         res.set_current(current)?;
-        Ok(res)
-    }
-    
-    /// Construct new Lem from raw
-    pub fn new_from_raw(raw: [u8;8] ) -> Result<Self, CanError> {
-        let res = Self { raw };
         Ok(res)
     }
     
