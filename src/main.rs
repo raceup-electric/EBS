@@ -91,6 +91,7 @@ async fn main(spawner: Spawner) {
             Phase::Zero  => {
                 if global_status.mission.is_dv() {
                     main_status.set_phase(Phase::One);
+                    global_status.asb_check_req = false;
                 }
             }
             Phase::One   => {
@@ -141,6 +142,7 @@ async fn main(spawner: Spawner) {
                    release_brake();
                    main_status.brake_engaged = false;
                    main_status.set_phase(Phase::Five);
+                   global_status.brake_req = false;
                 }
                 
             }
