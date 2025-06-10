@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use brake::BrakeController;
 use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
 use embassy_time::Timer;
@@ -14,26 +13,26 @@ use defmt_rtt as _;
 use embassy_sync::channel::Channel;
 use embassy_time::Duration;
 use embassy_stm32::can::{CanRx, CanTx, Frame, Id};
-use crate::can_management::messages::{ResGo, CarStatus, EbsStatus, CarMission, CheckAsbReq, EbsBrakeReq};
 
 mod tank_pressure;
 mod brake;
 mod can_management;
 mod config;
 
-use can_management::can_controller::CanController;
 
+use brake::BrakeController;
+use can_management::can_controller::CanController;
+use can_management::messages::{ResGo, CarStatus, EbsStatus, CarMission, CarMissionMission, CheckAsbReq, EbsBrakeReq};
 use tank_pressure::sensor::Sensor;
 use tank_pressure::pressure_sensor::{TankPressureSensor, tank_pressure_monitor};
-use brake::{BrakeSignal, BrakeStatus};
+use brake::BrakeSignal;
 use config::pressure_thresholds::*;
 
 static TANK_PRESSURE_SENSOR: StaticCell<TankPressureSensor> = StaticCell::new();
 static BRAKE_CONTROLLER: StaticCell<BrakeController> = StaticCell::new();
-static CAN: StaticCell<CanController> = StaticCell::new();
+
 
 static BRAKE_SIGNAL: Signal<CriticalSectionRawMutex, brake::BrakeSignal> = Signal::new();
-
 static CAN_WRITER: Channel<CriticalSectionRawMutex, Frame, 20> = Channel::new();
 
 
@@ -43,7 +42,9 @@ static MISSION : Signal<CriticalSectionRawMutex, Mission> = Signal::new();
 pub static TANK_STATUS : Signal<CriticalSectionRawMutex, TankStatus> = Signal::new();
 static SPEED : Signal<CriticalSectionRawMutex, f32> = Signal::new();
 static BRAKE_PRESSURE : Signal<CriticalSectionRawMutex, (f32, f32)> = Signal::new();
-static ERROR : Signal<CriticalSectionRawMutex, bool> = Signal::new();
+static ERROR : Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static BRAKE_REQ : Signal<CriticalSectionRawMutex, bool> = Signal::new();
+static ASB_CHECK_REQ : Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static GO : Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 
@@ -71,78 +72,102 @@ async fn main(spawner: Spawner) {
     let mut main_status = MainStatus::new();
     
     loop{
+        Timer::after(Duration::from_millis(50)).await;
+        main_status.click_counter += 1;
+
         global_status.update();
-        if global_status.error == true {
+        if global_status.error || !global_status.mission.is_dv() {
             main_status.set_phase(Phase::Zero);
         }
-        //todo: add await for each phase
+
+        main_status.update_tank_validation(&global_status.tank_status);
+        send_ebs_status_msg(&main_status, &global_status.tank_status).await;        
+        
         match main_status.phase {
             Phase::Zero  => {
                 if global_status.mission.is_dv() {
-                    main_status.set_phase(Phase::One)
+                    main_status.brake_consistency = false;
+                    main_status.set_phase(Phase::One);
                 }
+                main_status.brake_consistency = check_brake_consistency(&global_status.brake_pressure);
             }
             Phase::One   => {
-                if global_status.ASB_check_req {
+                if global_status.asb_check_req {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
-                else {
-                    let tank_press_validation = is_tank_pressure_valid(& global_status.tank_status);
-                    let tank_brake_consistency = check_tank_brake_pressure_consistency(& global_status.tank_status, & global_status.brake_pressure);
-                    let asb_check = tank_brake_consistency && tank_press_validation;
+                main_status.tank_brake_coherence = check_tank_brake_pressure_coherence(& global_status.tank_status, & global_status.brake_pressure);
+
+                if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
+                    main_status.internal_error = true;
                 }
+
             }
             Phase::Two(subphase)  => match subphase {
                 
                 PhaseTwo::FirstTankCheck  => {
                     BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
+                    main_status.brake_engaged = true;
                     main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
                 }
                 PhaseTwo::SecondTankCheck => {
-                    //pressure validation
-                    BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
-                    main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));               
+                    let first_tank_check = check_first_tank(&global_status.tank_status, &global_status.brake_pressure);
+                    if first_tank_check {
+                        BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
+                        main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));               
+                    }
+                    else if main_status.click_counter > 20{
+                        main_status.internal_error = true;
+                    }
                 }
                 PhaseTwo::SendValidation  => {
-                    //pressure validation
-                    //send exit EBS_check
-                    main_status.set_phase(Phase::Three);  
+                    let second_tank_check = check_second_tank(&global_status.tank_status, &global_status.brake_pressure);
+                    if second_tank_check && main_status.tank_validation {
+
+                        main_status.set_phase(Phase::Three);  
+                    }
+                    else if main_status.click_counter > 20{
+                        main_status.internal_error = true;
+                    }
                 }               
                 
             }
-            Phase::Three => {
-                //send validation brake and tanks
-                // wait for MCU to validate
+            Phase::Three => { // fase inutile, rimane in caso di aggiunta di ack
                 main_status.set_phase(Phase::Four);
-
-                
+                global_status.res_go = false; 
             }
             Phase::Four  => {
-                GO.wait().await;
-                BRAKE_SIGNAL.signal(BrakeSignal::Release);
-                main_status.set_phase(Phase::Five);
+                if global_status.res_go {
+                   release_brake();
+                   main_status.brake_engaged = false;
+                   main_status.set_phase(Phase::Five);
+                }
                 
             }
             Phase::Five  => {
-                //spawn continuos monitoring or use the spawned one
-                //send value
-                //check for brake request
-                //check for end run
-                
+                if global_status.brake_req {
+                    engage_brake();
+                    main_status.brake_engaged = true;
+                }
+                else {
+                    release_brake();
+                    main_status.brake_engaged = false;
+                }
+
             }
         }
+
     }
 }
 
-//informazioni ricevute esternamente dalla macchina a stati
+//informazioni ricevute esternamente al main
 struct GlobalStatus {
     mission:             Mission,
     tank_status:         TankStatus,
     brake_pressure:      BrakePressure,
     speed:               f32,
-    ASB_check_req:       bool,
+    asb_check_req:       bool,
     brake_req:           bool,
-    Res_GO:              bool,
+    res_go:              bool,
     error:               bool,
 }
 struct BrakePressure {
@@ -172,8 +197,8 @@ impl GlobalStatus {
             brake_pressure:       BrakePressure::new(),
             speed:                0.0,
             brake_req:            false,
-            ASB_check_req:        false,
-            Res_GO:               false,
+            asb_check_req:        false,
+            res_go:               false,
             error:                false
 
         }
@@ -192,8 +217,17 @@ impl GlobalStatus {
         if let Some(new_brake_pressure) = BRAKE_PRESSURE.try_take() {
             self.brake_pressure.set_front_rear(new_brake_pressure);
         }
-        if let Some(new_error) = ERROR.try_take() {
-            self.error = new_error;
+        if let Some(_error) = ERROR.try_take() {
+            self.error = true;
+        }
+        if let Some(_asb_check_req) = ASB_CHECK_REQ.try_take() {
+            self.asb_check_req = true;
+        }
+        if let Some(_go) = GO.try_take() {
+            self.res_go = true;
+        }
+        if let Some(new_brake_req) = BRAKE_REQ.try_take() {
+            self.brake_req = new_brake_req;
         }
     }
 }
@@ -201,27 +235,53 @@ impl GlobalStatus {
 //la differenza primaria tra MainStatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla main task mentre i valori della seconda vengono solo letti
 struct MainStatus {
     phase:   Phase,
+    click_counter: u32,
     tank_validation: bool,
     asb_check: bool,
     brake_engaged: bool,
     brake_consistency: bool,
     tank_brake_coherence: bool,
+    internal_error: bool,
+
 }
 
 impl MainStatus {
     pub fn new() -> Self {
         Self {
             phase: Phase::Zero,
+            click_counter: 0,
             tank_validation: false,
             asb_check: false,
             brake_engaged: false,
             brake_consistency: false,
             tank_brake_coherence: false,
-
+            internal_error: false,
         }
     }
+
+    pub fn update_tank_validation(&mut self, tank_status: &TankStatus) {
+        self.tank_validation = check_tank_pressure(&tank_status);
+    }
+
     pub fn set_phase(&mut self, new_phase: Phase) {
-        self.phase = new_phase;
+        self.phase          = new_phase;
+        self.click_counter  = 0;
+        self.internal_error = false;  
+        match new_phase {
+            Phase::Zero => {self.reset();}
+            _ => {}
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.phase                 = Phase::Zero;
+        self.tank_validation       = false;
+        self.asb_check             = false;
+        self.brake_engaged         = false;
+        self.brake_consistency     = false;
+        self.tank_brake_coherence  = false;
+        self.internal_error        = false;
+
     }
 
 }
@@ -241,12 +301,12 @@ enum Mission {
 impl Mission{
     pub fn is_dv(&self) -> bool{
         match &self{
-            (Mission::DVinspection |
+            Mission::DVinspection  |
             Mission::EBStest       |
             Mission::DVtrackdrive  |
             Mission::DVautocross   |
             Mission::DVskidpad     |
-            Mission::DVacceleration) => true,
+            Mission::DVacceleration => true,
             _ => false
         }
         
@@ -270,7 +330,7 @@ enum PhaseTwo {
     SendValidation,
 }
 
-struct TankStatus{
+pub struct TankStatus{
     tank_one_pressure: f32,
     tank_two_pressure: f32,
     sensor_one_sanity: bool,
@@ -288,14 +348,7 @@ impl TankStatus{
     }
 }
 
-#[derive(PartialEq)]
-enum Request{
-    None,
-    Brake,
-    AsbCheck,
-    AsbCheckAck,
-}
-pub fn is_tank_pressure_valid (tank_status: &TankStatus) -> bool{
+fn check_tank_pressure (tank_status: &TankStatus) -> bool{
     tank_status.tank_one_pressure > MIN_TANK_PRESS &&
     tank_status.tank_one_pressure < MAX_TANK_PRESS &&
     tank_status.tank_two_pressure > MIN_TANK_PRESS &&
@@ -303,65 +356,49 @@ pub fn is_tank_pressure_valid (tank_status: &TankStatus) -> bool{
 
 }
 
-pub fn check_tank_brake_pressure_consistency(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
+fn check_brake_consistency (brake_press: &BrakePressure) -> bool {
+    brake_press.front > MIN_FRONT_PRESS &&
+    brake_press.rear  > MIN_REAR_PRESS
+}
+
+fn check_tank_brake_pressure_coherence(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
     brake_press.front > FRONT_PRESS_MULT * tank_status.tank_one_pressure &&
     brake_press.front > FRONT_PRESS_MULT * tank_status.tank_two_pressure &&
     brake_press.rear  > REAR_PRESS_MULT * tank_status.tank_one_pressure &&
     brake_press.rear  > REAR_PRESS_MULT * tank_status.tank_two_pressure
 }
 
-pub fn send_phase_one_validation(tank_press_validation: bool, tank_brake_consistency_check: bool, global_status: &GlobalStatus){
-    //generate message main_status for phase one
+fn check_first_tank(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
+    brake_press.front > FRONT_PRESS_MULT * tank_status.tank_one_pressure &&
+    brake_press.rear  > REAR_PRESS_MULT * tank_status.tank_one_pressure &&
+    brake_press.front > MIN_FRONT_PRESS &&
+    brake_press.rear  > MIN_REAR_PRESS
 }
 
+fn check_second_tank(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
+    brake_press.front > FRONT_PRESS_MULT * tank_status.tank_two_pressure &&
+    brake_press.rear  > REAR_PRESS_MULT * tank_status.tank_two_pressure &&
+    brake_press.front > MIN_FRONT_PRESS &&
+    brake_press.rear  > MIN_REAR_PRESS
+}
 
-// pub async fn parse_tank_ebs_msg(system_check: bool, press_left_tank: f32, press_right_tank: f32, sanity_left_sensor: bool, sanity_right_sensor: bool) {
-//         match Force::new(system_check, press_left_tank, press_right, ) {
-//             Ok(force_msg) => {
-//                 match Frame::new_standard(
-//                     Force::MESSAGE_ID as u16,
-//                     force_msg.raw(),
-//                 ) {
-//                     Ok(force_frame) => {
-//                         can_tx.write(&force_frame).await;
-//                     }
-//                     Err(_) => {
-//                         if let Ok(err_frame) = Frame::new_standard(1u16, &[]) {
-//                             can_tx.write(&err_frame).await;
-//                         }
-//                     }
-//                 }
-//             }
-//             Err(_) => {
-//                 let err_payload = [0xFFu8; 8];
-//                 if let Ok(err_frame) = Frame::new_standard(
-//                     Force::MESSAGE_ID as u16,
-//                     &err_payload,
-//                 ) {
-//                     can_tx.write(&err_frame).await;
-//                 } else if let Ok(fail_frame) = Frame::new_standard(1u16, &[]) {
-//                     can_tx.write(&fail_frame).await;
-//                 }
-//             }
-//         }    
-// }
-
-async fn send_ebs_status_msg(main_status: MainStatus, global_status: GlobalStatus){
-    let system_check = (main_status.tank_validation &&
-        global_status.tank_status.sensor_one_sanity &&
-        global_status.tank_status.sensor_two_sanity);
+async fn send_ebs_status_msg(main_status: &MainStatus, tank_status: &TankStatus){
+    let system_check = main_status.tank_validation &&
+                             tank_status.sensor_one_sanity &&
+                             tank_status.sensor_two_sanity &&
+                             main_status.internal_error;
 
     if let Ok(main_status_msg) = EbsStatus::new(
         system_check,
-        global_status.tank_status.sensor_one_sanity,
-        global_status.tank_status.sensor_two_sanity,
+        tank_status.sensor_one_sanity,
+        tank_status.sensor_two_sanity,
         main_status.asb_check,
         main_status.brake_engaged,
         main_status.brake_consistency,
         main_status.tank_brake_coherence,
         false,
-        global_status.tank_status.tank_one_pressure,
-        global_status.tank_status.tank_two_pressure,
+        tank_status.tank_one_pressure,
+        tank_status.tank_two_pressure,
         
 
     ) {
@@ -374,6 +411,15 @@ async fn send_ebs_status_msg(main_status: MainStatus, global_status: GlobalStatu
     }
 }
 
+
+fn engage_brake(){
+    BRAKE_SIGNAL.signal(BrakeSignal::Engage);
+}
+
+fn release_brake(){
+    BRAKE_SIGNAL.signal(BrakeSignal::Release);
+}
+
 #[embassy_executor::task]
 async fn brake_control_task(controller: &'static mut BrakeController) {
     loop {
@@ -382,7 +428,6 @@ async fn brake_control_task(controller: &'static mut BrakeController) {
         Timer::after(Duration::from_millis(10)).await;
     }
 }
-
 
 
 #[embassy_executor::task]
@@ -413,25 +458,46 @@ async fn can_reader(
                         if let Ok(mex) = CarStatus::new_from_raw(message)  {
                             
                         } */
-                    if let Ok(msg) = CarStatus::try_from(payload){
+                        if let Ok(msg) = CarStatus::try_from(payload){
+                            BRAKE_PRESSURE.signal((msg.brake_rear_press(), msg.brake_front_press()));
+                            SPEED.signal(msg.speed().into());
 
-
-                    }
+                        }
                     },
 
                     ResGo::MESSAGE_ID => {
+                        GO.signal(());
 
                     },
 
                     CarMission::MESSAGE_ID => {
+                        if let Ok(msg) = CarMission::try_from(payload){
+                            MISSION.signal(match msg.mission() {
+                                CarMissionMission::DvEbsTest => Mission::EBStest,
+                                CarMissionMission::DvTrackdrive => Mission::DVtrackdrive,
+                                CarMissionMission::DvAutocross => Mission::DVautocross,
+                                CarMissionMission::DvSkidpad => Mission::DVskidpad,
+                                CarMissionMission::DvAcceleration => Mission::DVacceleration,
+                                CarMissionMission::Manualy => Mission::Manual,
+                                CarMissionMission::DvInspection => Mission::DVinspection,
+                                CarMissionMission::None => Mission::None,
+                                _ => Mission::None ,
+                            }
+                            )
+
+                       }
 
                     },
 
                     CheckAsbReq::MESSAGE_ID => {
+                        ASB_CHECK_REQ.signal(());
 
                     },
 
                     EbsBrakeReq::MESSAGE_ID => {
+                        if let Ok(msg) = EbsBrakeReq::try_from(payload) {
+                            BRAKE_REQ.signal(msg.req())
+                        }
 
                     },
                     

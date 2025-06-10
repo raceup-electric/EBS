@@ -58,30 +58,31 @@ impl BrakeController {
         self.pin1.set_high();
         self.pin2.set_high();
         self.status = BrakeStatus::Released;
-        defmt::info!("Freno RELEASED");
-    }
-
-    pub fn set_status(&mut self, status: BrakeStatus) {
-        self.status = status;
     }
 
     pub fn handle_signal(&mut self, signal: BrakeSignal) {
         match signal {
-            BrakeSignal::Engage => self.engage(),
-            BrakeSignal::Release => self.release(),
+            BrakeSignal::Engage =>  {
+                self.engage();
+                self.status = BrakeStatus::Engaged;
+            }
+                
+            BrakeSignal::Release =>  {
+                self.release();
+                self.status = BrakeStatus::Released;
+            }
 
             BrakeSignal::TankOneCheck => {
                 self.pin1.set_low();
                 self.pin2.set_high();
                 self.last_tank_utilized = Tank::One;
-                defmt::info!("Tank ONE check (pin1 LOW, pin2 HIGH)");
+                self.status = BrakeStatus::Engaged;
             }
 
             BrakeSignal::TankTwoCheck => {
                 self.pin1.set_high();
                 self.pin2.set_low();
                 self.last_tank_utilized = Tank::Two;
-                defmt::info!("Tank TWO check (pin1 HIGH, pin2 LOW)");
             }
         }
     }
