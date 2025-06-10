@@ -96,6 +96,7 @@ async fn main(spawner: Spawner) {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
                 main_status.tank_brake_coherence = check_tank_brake_pressure_coherence(& global_status.tank_status, & global_status.brake_pressure);
+                main_status.brake_consistency = check_brake_consistency(&global_status.brake_pressure);
 
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
                     main_status.internal_error = true;
@@ -115,17 +116,17 @@ async fn main(spawner: Spawner) {
                         BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
                         main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));               
                     }
-                    else if main_status.click_counter > 20{
+                    else if main_status.click_counter > 2000{
                         main_status.internal_error = true;
                     }
                 }
                 PhaseTwo::SendValidation  => {
                     let second_tank_check = check_second_tank(&global_status.tank_status, &global_status.brake_pressure);
                     if second_tank_check && main_status.tank_validation {
-
-                        main_status.set_phase(Phase::Three);  
+                        main_status.set_phase(Phase::Three);
+                        main_status.asb_check = true;
                     }
-                    else if main_status.click_counter > 20{
+                    else if main_status.click_counter > 1000{
                         main_status.internal_error = true;
                     }
                 }               
@@ -386,7 +387,7 @@ async fn send_ebs_status_msg(main_status: &MainStatus, tank_status: &TankStatus)
     let system_check = main_status.tank_validation &&
                              tank_status.sensor_one_sanity &&
                              tank_status.sensor_two_sanity &&
-                             main_status.internal_error;
+                             !main_status.internal_error;
 
     if let Ok(main_status_msg) = EbsStatus::new(
         system_check,

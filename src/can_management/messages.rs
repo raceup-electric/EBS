@@ -3380,11 +3380,11 @@ impl<'a> Arbitrary<'a> for Map {
 /// CarStatus
 ///
 /// - ID: 101 (0x65)
-/// - Size: 6 bytes
+/// - Size: 8 bytes
 /// - Transmitter: VCU
 #[derive(Clone, Copy)]
 pub struct CarStatus {
-    raw: [u8; 6],
+    raw: [u8; 8],
 }
 
 impl CarStatus {
@@ -3400,12 +3400,13 @@ impl CarStatus {
     pub const BRAKE_REAR_PRESS_MAX: f32 = 65_f32;
     
     /// Construct new CarStatus from values
-    pub fn new(hv: bool, air1: bool, precharge: bool, as_node: bool, rtd_req: bool, running_status: u8, speed: u8, brake_front_press: f32, brake_rear_press: f32) -> Result<Self, CanError> {
-        let mut res = Self { raw: [0u8; 6] };
+    pub fn new(hv: bool, air1: bool, precharge: bool, as_node: bool, scs: bool, rtd_req: bool, running_status: u8, speed: u8, brake_front_press: f32, brake_rear_press: f32) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 8] };
         res.set_hv(hv)?;
         res.set_air1(air1)?;
         res.set_precharge(precharge)?;
         res.set_as_node(as_node)?;
+        res.set_scs(scs)?;
         res.set_rtd_req(rtd_req)?;
         res.set_running_status(running_status)?;
         res.set_speed(speed)?;
@@ -3415,7 +3416,7 @@ impl CarStatus {
     }
     
     /// Access message payload raw value
-    pub fn raw(&self) -> &[u8; 6] {
+    pub fn raw(&self) -> &[u8; 8] {
         &self.raw
     }
     
@@ -3525,7 +3526,7 @@ impl CarStatus {
     ///
     /// - Min: 0
     /// - Max: 0
-    /// - Unit: " Open/Closed"
+    /// - Unit: " Closed/Open"
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn as_node(&self) -> bool {
@@ -3555,6 +3556,40 @@ impl CarStatus {
         Ok(())
     }
     
+    /// SCS
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: " Closed/Open"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn scs(&self) -> bool {
+        self.scs_raw()
+    }
+    
+    /// Get raw value of SCS
+    ///
+    /// - Start bit: 4
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn scs_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of SCS
+    #[inline(always)]
+    pub fn set_scs(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
+        Ok(())
+    }
+    
     /// rtd_req
     ///
     /// - Min: 0
@@ -3568,7 +3603,7 @@ impl CarStatus {
     
     /// Get raw value of rtd_req
     ///
-    /// - Start bit: 4
+    /// - Start bit: 5
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3576,7 +3611,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn rtd_req_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[5..6].load_le::<u8>();
         
         signal == 1
     }
@@ -3585,7 +3620,7 @@ impl CarStatus {
     #[inline(always)]
     pub fn set_rtd_req(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[5..6].store_le(value);
         Ok(())
     }
     
@@ -3597,7 +3632,7 @@ impl CarStatus {
     /// - Receivers: Vector__XXX
     #[inline(always)]
     pub fn running_status(&self) -> CarStatusRunningStatus {
-        let signal = self.raw.view_bits::<Lsb0>()[5..7].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[6..8].load_le::<u8>();
         
         match signal {
             3 => CarStatusRunningStatus::Running,
@@ -3610,7 +3645,7 @@ impl CarStatus {
     
     /// Get raw value of RunningStatus
     ///
-    /// - Start bit: 5
+    /// - Start bit: 6
     /// - Signal size: 2 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3618,7 +3653,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn running_status_raw(&self) -> u8 {
-        let signal = self.raw.view_bits::<Lsb0>()[5..7].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[6..8].load_le::<u8>();
         
         signal
     }
@@ -3630,7 +3665,7 @@ impl CarStatus {
         if value < 0_u8 || 3_u8 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 101 });
         }
-        self.raw.view_bits_mut::<Lsb0>()[5..7].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[6..8].store_le(value);
         Ok(())
     }
     
@@ -3647,7 +3682,7 @@ impl CarStatus {
     
     /// Get raw value of speed
     ///
-    /// - Start bit: 8
+    /// - Start bit: 9
     /// - Signal size: 8 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -3655,7 +3690,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn speed_raw(&self) -> u8 {
-        let signal = self.raw.view_bits::<Lsb0>()[8..16].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[9..17].load_le::<u8>();
         
         signal
     }
@@ -3667,7 +3702,7 @@ impl CarStatus {
         if value < 0_u8 || 0_u8 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 101 });
         }
-        self.raw.view_bits_mut::<Lsb0>()[8..16].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[9..17].store_le(value);
         Ok(())
     }
     
@@ -3684,7 +3719,7 @@ impl CarStatus {
     
     /// Get raw value of brake_front_press
     ///
-    /// - Start bit: 16
+    /// - Start bit: 17
     /// - Signal size: 16 bits
     /// - Factor: 0.001
     /// - Offset: 0
@@ -3692,7 +3727,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn brake_front_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
+        let signal = self.raw.view_bits::<Lsb0>()[17..33].load_le::<u16>();
         
         let factor = 0.001_f32;
         let offset = 0_f32;
@@ -3710,7 +3745,7 @@ impl CarStatus {
         let offset = 0_f32;
         let value = ((value - offset) / factor) as u16;
         
-        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[17..33].store_le(value);
         Ok(())
     }
     
@@ -3727,7 +3762,7 @@ impl CarStatus {
     
     /// Get raw value of brake_rear_press
     ///
-    /// - Start bit: 32
+    /// - Start bit: 33
     /// - Signal size: 16 bits
     /// - Factor: 0.001
     /// - Offset: 0
@@ -3735,7 +3770,7 @@ impl CarStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn brake_rear_press_raw(&self) -> f32 {
-        let signal = self.raw.view_bits::<Lsb0>()[32..48].load_le::<u16>();
+        let signal = self.raw.view_bits::<Lsb0>()[33..49].load_le::<u16>();
         
         let factor = 0.001_f32;
         let offset = 0_f32;
@@ -3753,7 +3788,7 @@ impl CarStatus {
         let offset = 0_f32;
         let value = ((value - offset) / factor) as u16;
         
-        self.raw.view_bits_mut::<Lsb0>()[32..48].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[33..49].store_le(value);
         Ok(())
     }
     
@@ -3764,9 +3799,9 @@ impl core::convert::TryFrom<&[u8]> for CarStatus {
     
     #[inline(always)]
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
-        if payload.len() != 6 { return Err(CanError::InvalidPayloadSize); }
-        let mut raw = [0u8; 6];
-        raw.copy_from_slice(&payload[..6]);
+        if payload.len() != 8 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 8];
+        raw.copy_from_slice(&payload[..8]);
         Ok(Self { raw })
     }
 }
@@ -3780,6 +3815,7 @@ impl core::fmt::Debug for CarStatus {
                 .field("air1", &self.air1())
                 .field("precharge", &self.precharge())
                 .field("as_node", &self.as_node())
+                .field("scs", &self.scs())
                 .field("rtd_req", &self.rtd_req())
                 .field("running_status", &self.running_status())
                 .field("speed", &self.speed())
@@ -3799,12 +3835,13 @@ impl<'a> Arbitrary<'a> for CarStatus {
         let air1 = u.int_in_range(0..=1)? == 1;
         let precharge = u.int_in_range(0..=1)? == 1;
         let as_node = u.int_in_range(0..=1)? == 1;
+        let scs = u.int_in_range(0..=1)? == 1;
         let rtd_req = u.int_in_range(0..=1)? == 1;
         let running_status = u.int_in_range(0..=3)?;
         let speed = u.int_in_range(0..=0)?;
         let brake_front_press = u.float_in_range(0_f32..=65_f32)?;
         let brake_rear_press = u.float_in_range(0_f32..=65_f32)?;
-        CarStatus::new(hv,air1,precharge,as_node,rtd_req,running_status,speed,brake_front_press,brake_rear_press).map_err(|_| arbitrary::Error::IncorrectFormat)
+        CarStatus::new(hv,air1,precharge,as_node,scs,rtd_req,running_status,speed,brake_front_press,brake_rear_press).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 /// Defined values for RunningStatus
