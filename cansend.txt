@@ -1,0 +1,6 @@
+[botelc@archMinix EBS]$ cansend can0 047#03 //mission dv
+[botelc@archMinix EBS]$ cansend can0 065#3F0460EA60EA0000 //fake car status
+[botelc@archMinix EBS]$ cansend can0 047#00 //mission none
+[botelc@archMinix EBS]$ cansend can0 065#3F0460EA60EA0000
+[botelc@archMinix EBS]$ cansend can0 047#03
+[botelc@archMinix EBS]$ cansend can0 068#00 //ebs req
