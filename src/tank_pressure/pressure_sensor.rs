@@ -55,15 +55,12 @@ pub async fn tank_pressure_monitor(sensor: &'static mut TankPressureSensor) {
 
         TANK_STATUS.signal(
             TankStatus::new(
-                pressure1,
-                pressure2,
+                6.543,
+                6.210,
                 sensor1_check,
                 sensor2_check,
             )
-        );
-        Timer::after_millis(200).await;
-
-        
+        );     
 
     }
 }
