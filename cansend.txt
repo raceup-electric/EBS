@@ -1,6 +1,10 @@
-[botelc@archMinix EBS]$ cansend can0 047#03 //mission dv
-[botelc@archMinix EBS]$ cansend can0 065#3F0460EA60EA0000 //fake car status
-[botelc@archMinix EBS]$ cansend can0 047#00 //mission none
-[botelc@archMinix EBS]$ cansend can0 065#3F0460EA60EA0000
-[botelc@archMinix EBS]$ cansend can0 047#03
-[botelc@archMinix EBS]$ cansend can0 068#00 //ebs req
+alias mission_dv='cansend can0 047#03'
+alias mission_none='cansend can0 047#03'
+alias res_go='cansend can0 020#00'
+alias asb_check='068#00'
+alias brake='cansend can0 069#01'
+alias brake_rel='cansend can0 069#00'
+alias brake_press_up='cansend can0 065#FFFFFFFFFFFFFFFF'
+alias brake_press_down='cansend can0 065#0000000000000000'
+alias asb_check='cansend can0 068#00'
+alias mission_none='cansend can0 047#00'

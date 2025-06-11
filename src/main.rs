@@ -102,6 +102,9 @@ async fn main(spawner: Spawner) {
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
                     main_status.internal_error = true;
                 }
+                else {
+                    main_status.internal_error = false;
+                }
 
             }
             Phase::Two(subphase)  => match subphase {
@@ -478,7 +481,7 @@ async fn can_reader(
                             
                         } */
                         if let Ok(msg) = CarStatus::try_from(payload){
-                            BRAKE_PRESSURE.signal((msg.brake_rear_press(), msg.brake_front_press()));
+                            BRAKE_PRESSURE.signal((msg.brake_front_press(), msg.brake_rear_press()));
                             SPEED.signal(msg.speed().into());
 
                         }
