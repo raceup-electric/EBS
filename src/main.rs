@@ -481,7 +481,8 @@ async fn can_reader(
                             
                         } */
                         if let Ok(msg) = CarStatus::try_from(payload){
-                            BRAKE_PRESSURE.signal((msg.brake_front_press(), msg.brake_rear_press()));
+                            BRAKE_PRESSURE.signal((60.0,60.0));
+                            let brake_pressure_fake = false;
                             SPEED.signal(msg.speed().into());
 
                         }

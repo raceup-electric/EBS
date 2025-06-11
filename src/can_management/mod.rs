@@ -1,4 +1,3 @@
-pub mod frame;
 pub mod can_controller;
 #[allow(dead_code)]
 pub mod messages;
