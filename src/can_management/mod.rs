@@ -1,9 +1,5 @@
-pub mod frame;
 pub mod can_controller;
-#[allow(dead_code)]
 pub mod messages;
-
-
 
 #[macro_export]
 macro_rules! get_byte {

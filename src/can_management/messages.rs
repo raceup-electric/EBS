@@ -3,6 +3,7 @@
 #![allow(clippy::let_and_return, clippy::eq_op)]
 #![allow(clippy::excessive_precision, clippy::manual_range_contains, clippy::absurd_extreme_comparisons)]
 #![deny(clippy::arithmetic_side_effects)]
+#![allow(warnings)]
 
 //! Message definitions from file `"can2.dbc"`
 //!

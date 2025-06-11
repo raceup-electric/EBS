@@ -73,32 +73,37 @@ async fn main(spawner: Spawner) {
     
     loop{
         Timer::after(Duration::from_millis(50)).await;
-        main_status.click_counter += 1;
-
+  
         global_status.update();
-        if global_status.error || !global_status.mission.is_dv() {
-            main_status.set_phase(Phase::Zero);
-        }
 
-        main_status.update_tank_validation(&global_status.tank_status);
-        send_ebs_status_msg(&main_status, &global_status.tank_status).await;        
+        if main_status.phase != Phase::Zero{
+            if global_status.error || !global_status.mission.is_dv() {
+            global_status.reset();
+            main_status.reset();
+            continue;
+            }
+            main_status.click_counter += 1;
+            main_status.update(&global_status.tank_status, &global_status.brake_pressure);
+            send_ebs_status_msg(&main_status, &global_status.tank_status).await;
+        }
         
         match main_status.phase {
             Phase::Zero  => {
                 if global_status.mission.is_dv() {
-                    main_status.brake_consistency = false;
                     main_status.set_phase(Phase::One);
+                    global_status.asb_check_req = false;
                 }
-                main_status.brake_consistency = check_brake_consistency(&global_status.brake_pressure);
             }
             Phase::One   => {
                 if global_status.asb_check_req {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
-                main_status.tank_brake_coherence = check_tank_brake_pressure_coherence(& global_status.tank_status, & global_status.brake_pressure);
 
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
                     main_status.internal_error = true;
+                }
+                else {
+                    main_status.internal_error = false;
                 }
 
             }
@@ -122,8 +127,8 @@ async fn main(spawner: Spawner) {
                 PhaseTwo::SendValidation  => {
                     let second_tank_check = check_second_tank(&global_status.tank_status, &global_status.brake_pressure);
                     if second_tank_check && main_status.tank_validation {
-
-                        main_status.set_phase(Phase::Three);  
+                        main_status.set_phase(Phase::Three);
+                        main_status.asb_check = true;
                     }
                     else if main_status.click_counter > 20{
                         main_status.internal_error = true;
@@ -140,11 +145,12 @@ async fn main(spawner: Spawner) {
                    release_brake();
                    main_status.brake_engaged = false;
                    main_status.set_phase(Phase::Five);
+                   global_status.brake_req = false;
                 }
                 
             }
             Phase::Five  => {
-                if global_status.brake_req {
+                if global_status.brake_req && global_status.speed <= 5.0 {
                     engage_brake();
                     main_status.brake_engaged = true;
                 }
@@ -170,6 +176,7 @@ struct GlobalStatus {
     res_go:              bool,
     error:               bool,
 }
+
 struct BrakePressure {
     front: f32,
     rear: f32
@@ -201,7 +208,18 @@ impl GlobalStatus {
             res_go:               false,
             error:                false
 
-        }
+        }            
+    }
+
+    pub fn reset(&mut self) {
+        self.mission =              Mission::None;
+        self.tank_status =          TankStatus::new(0.0,0.0,true, true);
+        self.brake_pressure =       BrakePressure::new();
+        self.speed =                0.0;
+        self.brake_req =            false;
+        self.asb_check_req =        false;
+        self.res_go =               false;
+        self.error =                false;
     }
 
     pub fn update(&mut self) {
@@ -259,8 +277,10 @@ impl MainStatus {
         }
     }
 
-    pub fn update_tank_validation(&mut self, tank_status: &TankStatus) {
+    pub fn update(&mut self, tank_status: &TankStatus, brake_press: &BrakePressure) {
         self.tank_validation = check_tank_pressure(&tank_status);
+        self.brake_consistency = check_brake_consistency(&brake_press);
+        self.tank_brake_coherence = check_tank_brake_pressure_coherence(&tank_status, &brake_press);
     }
 
     pub fn set_phase(&mut self, new_phase: Phase) {
@@ -268,7 +288,9 @@ impl MainStatus {
         self.click_counter  = 0;
         self.internal_error = false;  
         match new_phase {
-            Phase::Zero => {self.reset();}
+            Phase::Zero => {
+                self.reset();
+            }
             _ => {}
         }
     }
@@ -313,7 +335,7 @@ impl Mission{
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum Phase {
     Zero,  // not in dv mission
     One,   // sdc open, validation brake
@@ -323,7 +345,7 @@ enum Phase {
     Five   // running: Continous Monitoring and Brake Service
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum PhaseTwo {
     FirstTankCheck,
     SecondTankCheck,
@@ -386,7 +408,7 @@ async fn send_ebs_status_msg(main_status: &MainStatus, tank_status: &TankStatus)
     let system_check = main_status.tank_validation &&
                              tank_status.sensor_one_sanity &&
                              tank_status.sensor_two_sanity &&
-                             main_status.internal_error;
+                             !main_status.internal_error;
 
     if let Ok(main_status_msg) = EbsStatus::new(
         system_check,
@@ -459,7 +481,7 @@ async fn can_reader(
                             
                         } */
                         if let Ok(msg) = CarStatus::try_from(payload){
-                            BRAKE_PRESSURE.signal((msg.brake_rear_press(), msg.brake_front_press()));
+                            BRAKE_PRESSURE.signal((msg.brake_front_press(), msg.brake_rear_press()));
                             SPEED.signal(msg.speed().into());
 
                         }

@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use embassy_stm32::can::{frame::Envelope, Id};
 
 #[derive(Clone)]
