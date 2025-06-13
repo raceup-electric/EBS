@@ -3,6 +3,7 @@
 
 use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
+use embassy_stm32::can::filter::BankConfig;
 use embassy_time::Timer;
 use defmt::*;
 use static_cell::StaticCell;
@@ -12,7 +13,8 @@ use panic_probe as _;
 use defmt_rtt as _;
 use embassy_sync::channel::Channel;
 use embassy_time::Duration;
-use embassy_stm32::can::{CanRx, CanTx, Frame, Id};
+use embassy_stm32::can::{CanRx, CanTx, Fifo, Frame, Id, StandardId};
+use embassy_stm32::can::filter::ListEntry16;
 
 mod tank_pressure;
 mod brake;
@@ -64,6 +66,37 @@ async fn main(spawner: Spawner) {
 
     let mut can = CanController::new_can2(p.CAN2, p.PB12, p.PB13, 500_000, p.CAN1, p.PA11, p.PA12).await;
     let (can_tx, can_rx) = can.can.split();
+
+        can.can.modify_filters().enable_bank(
+        0,
+        Fifo::Fifo0,
+        BankConfig::List16([
+            ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                ResGo::MESSAGE_ID as u16
+            ))),
+            ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                CheckAsbReq::MESSAGE_ID as u16
+            ))),
+            ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                EbsBrakeReq::MESSAGE_ID as u16
+            ))),
+            ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                CarMission::MESSAGE_ID as u16
+            ))),
+            ]),
+        );
+        can.can.modify_filters().enable_bank(
+            0,
+            Fifo::Fifo1,
+            BankConfig::List16([
+                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                    CarStatus::MESSAGE_ID as u16
+                ))),
+                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
+                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
+                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
+        ]),
+    );
 
     spawner.spawn(can_writer(can_tx)).unwrap();
     spawner.spawn(can_reader(can_rx)).unwrap();
@@ -530,6 +563,5 @@ async fn can_reader(
             }
             Err(_) => info!("No messages")
         }
-        embassy_time::Timer::after_millis(2).await;
     }
 }
