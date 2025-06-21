@@ -17,16 +17,15 @@ pub const SCALING_FACTOR: f32 = MAX_PRESSURE / (MAX_VOLTAGE - MIN_VOLTAGE);
 
 /// Converte un valore ADC in tensione (V)
 pub fn adc_to_voltage(adc_reading: u16) -> f32 {
-    (adc_reading as f32 * ADC_VOLTAGE_REF / MAX_ADC_VALUE) * 2.0 //dimezzamento di corrente in hardware
+    (adc_reading as f32 * ADC_VOLTAGE_REF / MAX_ADC_VALUE) * 2.0 // dimezzamento di corrente in hardware
 }
 
 /// Converte una tensione in pressione (Bar)
 pub fn voltage_to_pressure(voltage: f32) -> f32 {
     if voltage < MIN_VOLTAGE {
         0.0 // Se il valore è fuori scala, restituisce 0 Bar
-    } else if voltage > MAX_VOLTAGE {
-        MAX_PRESSURE // Se è oltre il massimo, restituisce la pressione massima
-    } else {
+    }
+    else {
         SCALING_FACTOR * (voltage - MIN_VOLTAGE)
     }
 } 
