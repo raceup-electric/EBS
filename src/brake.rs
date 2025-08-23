@@ -5,7 +5,7 @@ pub enum BrakeSignal {
     Engage,
     Release,
     TankOneCheck,
-    TankTwoCheck
+    // TankTwoCheck
 }
 
 #[derive(defmt::Format)]
@@ -17,7 +17,7 @@ pub enum BrakeStatus {
 
 pub enum Tank {
     One,
-    Two
+    // Two
 }
 pub struct BrakeController {
     pin1: Output<'static>,
@@ -42,13 +42,13 @@ impl BrakeController {
                 Tank::One => { //now brake realising second tank
                     self.pin1.set_high();
                     self.pin2.set_low();
-                    self.last_tank_utilized = Tank::Two;
-                }
-                Tank::Two => { //now brake realising first tank
-                    self.pin1.set_low();
-                    self.pin2.set_high();
                     self.last_tank_utilized = Tank::One;
-                }    
+                }
+                // Tank::Two => { //now brake realising first tank
+                //     self.pin1.set_low();
+                //     self.pin2.set_high();
+                //     self.last_tank_utilized = Tank::One;
+                // }    
             }
             self.status = BrakeStatus::Engaged;
         }
@@ -79,11 +79,11 @@ impl BrakeController {
                 self.status = BrakeStatus::Engaged;
             }
 
-            BrakeSignal::TankTwoCheck => {
-                self.pin1.set_high();
-                self.pin2.set_low();
-                self.last_tank_utilized = Tank::Two;
-            }
+            // BrakeSignal::TankTwoCheck => {
+            //     self.pin1.set_high();
+            //     self.pin2.set_low();
+            //     self.last_tank_utilized = Tank::Two;
+            // }
         }
     }
 }

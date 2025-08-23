@@ -62,8 +62,5 @@ pub async fn tank_pressure_monitor(sensor: &'static mut TankPressureSensor) {
             )
         );
         Timer::after_millis(200).await;
-
-        
-
     }
 }

@@ -150,7 +150,7 @@ async fn main(spawner: Spawner) {
                 PhaseTwo::SecondTankCheck => {
                     let first_tank_check = check_first_tank(&global_status.tank_status, &global_status.brake_pressure);
                     if first_tank_check {
-                        BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
+                        // BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
                         main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));               
                     }
                     else if main_status.click_counter > 20{
