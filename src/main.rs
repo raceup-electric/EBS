@@ -132,7 +132,7 @@ async fn main(spawner: Spawner) {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
 
-                if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
+                if !main_status.tank_brake_coherence { //&& main_status.click_counter >= 50 {
                     main_status.internal_error = true;
                 }
                 else {
