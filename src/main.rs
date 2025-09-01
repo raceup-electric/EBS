@@ -18,7 +18,7 @@ use crate::usb_serial::usb::Serial;
 use defmt::info;
 // use panic_probe as _;
 use embassy_sync::channel::Channel;
-use embassy_time::Duration;
+use embassy_time::{Ticker, Duration};
 use embassy_stm32::can::{CanRx, CanTx, Fifo, Frame, Id, StandardId};
 use embassy_stm32::can::filter::ListEntry16;
 
@@ -118,9 +118,10 @@ async fn main(spawner: Spawner) {
 
     let mut time = embassy_time::Instant::now().as_millis();
     
+    let mut ticker = Ticker::every(Duration::from_millis(50));
+
     loop{
-        Timer::after_millis(50).await;
-  
+        ticker.next().await;
         global_status.update();
         
         if main_status.phase != Phase::Zero{
@@ -133,7 +134,8 @@ async fn main(spawner: Spawner) {
             main_status.update(&global_status.tank_status, &global_status.brake_pressure);
             send_ebs_status_msg(&main_status, &global_status.tank_status).await;
         }
-
+        
+        // debug usb
         if embassy_time::Instant::now().as_millis() - time > 2000u64 {
             info!("** GLOBAL STATUS **\n    Mission: {}\n    Tank Status -> T1 {}, T2 {}, S1 {}, S2 {}\n    Brake Pressure Front: {}, Brake Pressure Rear: {}\n    ASB Brake Request: {}\n    Brake Request: {}\n    Res Go: {}\n    Error: {}\n", global_status.mission.as_raw(),
             global_status.tank_status.tank_one_pressure, global_status.tank_status.tank_two_pressure, global_status.tank_status.sensor_one_sanity, global_status.tank_status.sensor_two_sanity, global_status.brake_pressure.front, global_status.brake_pressure.rear, global_status.asb_check_req, global_status.brake_req, global_status.res_go, global_status.error);
@@ -154,7 +156,9 @@ async fn main(spawner: Spawner) {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
 
-                if !main_status.tank_brake_coherence { //&& main_status.click_counter >= 50 {
+                if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
+         
+         
                     main_status.internal_error = true;
                 }
                 else {
@@ -306,7 +310,7 @@ impl GlobalStatus {
     }
 }
 //da intendere come le informazioni interne alla macchina a stati durante l'esecuzione
-//la differenza primaria tra MainStatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla main task mentre i valori della seconda vengono solo letti
+//la differenza primaria tra MainS2tatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla main task mentre i valori della seconda vengono solo letti
 #[derive(Debug)]
 struct MainStatus {
     phase:   Phase,
