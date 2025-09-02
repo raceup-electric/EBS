@@ -1,3 +1,4 @@
+#![allow(warnings)]
 // Generated code!
 #![allow(unused_comparisons, unreachable_patterns)]
 #![allow(clippy::let_and_return, clippy::eq_op)]
