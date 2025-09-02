@@ -3,7 +3,6 @@ use crate::tank_pressure::sensor::Sensor;
 use crate::tank_pressure::filter_buffer::FilterBuffer;
 use crate::tank_pressure::utils::*;
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
-use embassy_stm32::Peri;
 use crate::TANK_STATUS;
 use crate::TankStatus;  
 
@@ -14,14 +13,14 @@ use crate::TankStatus;
 pub const N_NEW_SAMPLES: usize = 10;
 
 pub struct TankPressureSensor {
-    sensor1: Sensor<ADC1, Peri<'static, PA1>>,
-    sensor2: Sensor<ADC2, Peri<'static, PA2>>,
+    sensor1: Sensor<ADC1, PA1>,
+    sensor2: Sensor<ADC2, PA2>,
     buffer1: FilterBuffer,
     buffer2: FilterBuffer,
 }
 
 impl TankPressureSensor {
-    pub fn new(sensor1: Sensor<ADC1, Peri<'static, PA1>>, sensor2: Sensor<ADC2, Peri<'static,  PA2>>) -> Self {
+    pub fn new(sensor1: Sensor<ADC1, PA1>, sensor2: Sensor<ADC2, PA2>) -> Self {
         Self {
             sensor1,
             sensor2,

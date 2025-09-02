@@ -1,6 +1,5 @@
 use embassy_stm32::gpio::{Output, Level, Speed};
 use embassy_stm32::peripherals::{PC6, PC7};
-use embassy_stm32::Peri;
 pub enum BrakeSignal {
     Engage,
     Release,
@@ -27,7 +26,7 @@ pub struct BrakeController {
 }
 
 impl BrakeController {
-    pub fn new(pin1: Peri<'static,PC6>, pin2: Peri<'static,PC7>) -> Self {
+    pub fn new(pin1: PC6, pin2: PC7) -> Self {
         Self {
             pin1: Output::new(pin1, Level::High, Speed::Low),
             pin2: Output::new(pin2, Level::High, Speed::Low),

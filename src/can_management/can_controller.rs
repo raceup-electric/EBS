@@ -5,8 +5,7 @@ use embassy_stm32::can::{
 };
 
 use embassy_stm32::{
-    peripherals::{ CAN1, CAN2, PA11, PA12, PB12, PB13},
-    Peri
+    peripherals::{ CAN1, CAN2, PA11, PA12, PB12, PB13}
 };
 
 bind_interrupts!(struct Irqs1 {
@@ -40,7 +39,7 @@ impl<'a> CanController<'a>{
         controller
     }
 
-    pub async fn _new_can1(peri: Peri<'static, CAN1> , rx: Peri<'static, PA11>, tx: Peri<'static, PA12>, baudrate: u32) -> Self {
+    pub async fn _new_can1(peri: CAN1, rx: PA11, tx: PA12, baudrate: u32) -> Self {
         let controller = CanController {
             can: Can::new(
                 peri,
@@ -53,8 +52,8 @@ impl<'a> CanController<'a>{
         Self::new(controller, baudrate).await
     }
 
-    pub async fn new_can2(peri: Peri<'static, CAN2>, rx: Peri<'static, PB12>, tx: Peri< 'static, PB13>, baudrate: u32, peri1: Peri<'static, CAN1>, rx1: Peri<'static, PA11>, tx1: Peri<'static, PA12> ) -> Self {
-        let mut can1 = Can::new(peri1, rx1, tx1, Irqs1);
+    pub async fn new_can2(peri: CAN2, rx: PB12, tx: PB13, baudrate: u32, peri1: CAN1, mut rx1: PA11, mut tx1: PA12) -> (Self, PA11, PA12) {
+        let mut can1 = Can::new(peri1, &mut rx1, &mut tx1, Irqs1);
  
         let controller = CanController {
             can: Can::new(peri, rx, tx, Irqs2),
@@ -66,7 +65,7 @@ impl<'a> CanController<'a>{
         can1.sleep().await;
         drop(can1);
 
-        Self::new(controller, baudrate).await
+        (Self::new(controller, baudrate).await, rx1, tx1)       
     }
 
 }

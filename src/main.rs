@@ -9,10 +9,16 @@ use defmt::*;
 use static_cell::StaticCell;
 use embassy_sync::signal::Signal;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use panic_probe as _;
-use defmt_rtt as _;
+
+use crate::can_management::messages::HydraulicPressure;
+use crate::usb_serial::usb::Serial;
+// use panic_probe as _;
+// use defmt_rtt as _;
+
+use defmt::info;
+// use panic_probe as _;
 use embassy_sync::channel::Channel;
-use embassy_time::Duration;
+use embassy_time::{Ticker, Duration};
 use embassy_stm32::can::{CanRx, CanTx, Fifo, Frame, Id, StandardId};
 use embassy_stm32::can::filter::ListEntry16;
 
@@ -20,6 +26,7 @@ mod tank_pressure;
 mod brake;
 mod can_management;
 mod config;
+mod usb_serial;
 
 
 use brake::BrakeController;
@@ -29,6 +36,7 @@ use tank_pressure::sensor::Sensor;
 use tank_pressure::pressure_sensor::{TankPressureSensor, tank_pressure_monitor};
 use brake::BrakeSignal;
 use config::pressure_thresholds::*;
+use usb_serial::prepare_config;
 
 static TANK_PRESSURE_SENSOR: StaticCell<TankPressureSensor> = StaticCell::new();
 static BRAKE_CONTROLLER: StaticCell<BrakeController> = StaticCell::new();
@@ -52,7 +60,7 @@ static GO : Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_stm32::init(Default::default());
+    let p = embassy_stm32::init(prepare_config());
 
     let tank_pressure_sensor = TANK_PRESSURE_SENSOR.init (TankPressureSensor::new(
         Sensor::new(Adc::new(p.ADC1), p.PA1),
@@ -62,9 +70,11 @@ async fn main(spawner: Spawner) {
     
     let brake_controller = BRAKE_CONTROLLER.init(BrakeController::new(p.PC6,p.PC7));
     spawner.spawn(brake_control_task(brake_controller)).unwrap();
-    
 
-    let mut can = CanController::new_can2(p.CAN2, p.PB12, p.PB13, 500_000, p.CAN1, p.PA11, p.PA12).await;
+    let (mut can, rx1, tx1)  = CanController::new_can2(p.CAN2, p.PB12, p.PB13, 500_000, p.CAN1, p.PA11, p.PA12).await;
+
+    Serial::init(p.USB_OTG_FS, tx1, rx1, &spawner);
+
     let (can_tx, can_rx) = can.can.split();
 
         can.can.modify_filters().enable_bank(
@@ -92,7 +102,9 @@ async fn main(spawner: Spawner) {
                 ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
                     CarStatus::MESSAGE_ID as u16
                 ))),
-                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
+                ListEntry16::data_frames_with_id(unwrap!(StandardId::new(
+                    HydraulicPressure::MESSAGE_ID as u16
+                ))),
                 ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
                 ListEntry16::data_frames_with_id(unwrap!(StandardId::new(0x1))),
         ]),
@@ -103,12 +115,15 @@ async fn main(spawner: Spawner) {
 
     let mut global_status = GlobalStatus::new();
     let mut main_status = MainStatus::new();
-    
-    loop{
-        Timer::after(Duration::from_millis(50)).await;
-  
-        global_status.update();
 
+    let mut time = embassy_time::Instant::now().as_millis();
+    
+    let mut ticker = Ticker::every(Duration::from_millis(50));
+
+    loop{
+        ticker.next().await;
+        global_status.update();
+        
         if main_status.phase != Phase::Zero{
             if global_status.error || !global_status.mission.is_dv() {
             global_status.reset();
@@ -118,6 +133,15 @@ async fn main(spawner: Spawner) {
             main_status.click_counter += 1;
             main_status.update(&global_status.tank_status, &global_status.brake_pressure);
             send_ebs_status_msg(&main_status, &global_status.tank_status).await;
+        }
+        
+        // debug usb
+        if embassy_time::Instant::now().as_millis() - time > 2000u64 {
+            info!("** GLOBAL STATUS **\n    Mission: {}\n    Tank Status -> T1 {}, T2 {}, S1 {}, S2 {}\n    Brake Pressure Front: {}, Brake Pressure Rear: {}\n    ASB Brake Request: {}\n    Brake Request: {}\n    Res Go: {}\n    Error: {}\n", global_status.mission.as_raw(),
+            global_status.tank_status.tank_one_pressure, global_status.tank_status.tank_two_pressure, global_status.tank_status.sensor_one_sanity, global_status.tank_status.sensor_two_sanity, global_status.brake_pressure.front, global_status.brake_pressure.rear, global_status.asb_check_req, global_status.brake_req, global_status.res_go, global_status.error);
+            info!("** MAIN STATUS**\n    Phase: {}\n    Click Counter: {}\n    Tank Validation: {}\n    ASB Check: {}\n    Brake engaged: {}\n    Brake Consistency: {}\n    Tank Brake Coherence: {}\n    Internal Error: {}\n", main_status.phase.value(), main_status.click_counter, main_status.tank_validation,
+            main_status.asb_check, main_status.brake_engaged, main_status.brake_consistency, main_status.tank_brake_coherence, main_status.internal_error);
+            time = embassy_time::Instant::now().as_millis();
         }
         
         match main_status.phase {
@@ -133,6 +157,8 @@ async fn main(spawner: Spawner) {
                 }
 
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
+         
+         
                     main_status.internal_error = true;
                 }
                 else {
@@ -210,6 +236,7 @@ struct GlobalStatus {
     error:               bool,
 }
 
+#[derive(Debug)]
 struct BrakePressure {
     front: f32,
     rear: f32
@@ -283,7 +310,8 @@ impl GlobalStatus {
     }
 }
 //da intendere come le informazioni interne alla macchina a stati durante l'esecuzione
-//la differenza primaria tra MainStatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla main task mentre i valori della seconda vengono solo letti
+//la differenza primaria tra MainS2tatus e GlobalStatus è che i valori appartenti alla prima sono computati e modificati dalla main task mentre i valori della seconda vengono solo letti
+#[derive(Debug)]
 struct MainStatus {
     phase:   Phase,
     click_counter: u32,
@@ -342,6 +370,9 @@ impl MainStatus {
 }
 
 
+
+#[repr(u16)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Mission {
     None,
     Manual,
@@ -366,25 +397,45 @@ impl Mission{
         }
         
     }
+
+    pub fn as_raw(&self) -> u16 {
+        *self as u16
+    }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[repr(u16)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Phase {
-    Zero,  // not in dv mission
-    One,   // sdc open, validation brake
-    Two(PhaseTwo),   // ASB check
+    Zero = 0,  // not in dv mission
+    One = 1,   // sdc open, validation brake
+    Two(PhaseTwo) = 2,   // ASB check
     Three, // brake engaged, validation brake
     Four,  // Ready to Drive, wait for GO
     Five   // running: Continous Monitoring and Brake Service
 }
 
-#[derive(Copy, Clone, PartialEq)]
+impl Phase{
+    pub fn value(&self) -> u16 {
+        match *self {
+            Phase::Zero => 0,
+            Phase::One => 1,
+            Phase::Two(_) => 2,
+            Phase::Three => 3,
+            Phase::Four => 4,
+            Phase::Five => 5
+        }
+    }
+}
+
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum PhaseTwo {
     FirstTankCheck,
     SecondTankCheck,
     SendValidation,
 }
 
+#[derive(Debug)]
 pub struct TankStatus{
     tank_one_pressure: f32,
     tank_two_pressure: f32,
@@ -513,6 +564,11 @@ async fn can_reader(
 
                         }
                     },
+                    HydraulicPressure::MESSAGE_ID => {
+                        if let Ok(msg) = HydraulicPressure::try_from(payload){
+                            BRAKE_PRESSURE.signal((msg.press_front() as f32, msg.press_rear() as f32));
+                        }
+                    },
 
                     ResGo::MESSAGE_ID => {
                         GO.signal(());
@@ -554,7 +610,7 @@ async fn can_reader(
 
                 }
             }
-            Err(_) => info!("No messages")
+            Err(_) => {} //info!("No messages")
         }
     }
 }
