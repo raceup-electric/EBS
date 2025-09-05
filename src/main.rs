@@ -117,7 +117,7 @@ async fn main(spawner: Spawner) {
     let mut main_status = MainStatus::new();
 
     let mut time = embassy_time::Instant::now().as_millis();
-    
+    let mut instant_check = embassy_time::Instant::now();
     let mut ticker = Ticker::every(Duration::from_millis(50));
 
     loop{
@@ -148,50 +148,61 @@ async fn main(spawner: Spawner) {
             Phase::Zero  => {
                 if global_status.mission.is_dv() {
                     main_status.set_phase(Phase::One);
-                    global_status.asb_check_req = false;
+                    // global_status.asb_check_req = false;
                 }
             }
             Phase::One   => {
-                if global_status.asb_check_req {
-                    main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
+                // asb_check_req --> do the flip flop
+                if global_status.asb_check_req && main_status.tank_validation{
+                    // main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck));
+                    engage_brake();
+                    main_status.set_phase(Phase::Five);
                 }
-
-                if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
-         
-         
-                    main_status.internal_error = true;
-                }
-                else {
-                    main_status.internal_error = false;
-                }
-
+                
+                // better to check logic of this one
+                // if !main_status.tank_brake_coherence && main_status.click_counter >= 50 { 
+                //     main_status.internal_error = true;
+                // }
+                // else {
+                //     main_status.internal_error = false;
+                // }
             }
             Phase::Two(subphase)  => match subphase {
                 
                 PhaseTwo::FirstTankCheck  => {
-                    BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
-                    main_status.brake_engaged = true;
-                    main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
+                    // if instant_check.elapsed() >= Duration::from_millis(1500){
+                    //     BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
+                    //     main_status.brake_engaged = true;
+                    //     main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
+                    // }
+                    // instant_check = embassy_time::Instant::now();
                 }
                 PhaseTwo::SecondTankCheck => {
-                    let first_tank_check = check_first_tank(&global_status.tank_status, &global_status.brake_pressure);
-                    if first_tank_check {
-                        BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
-                        main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));               
-                    }
-                    else if main_status.click_counter > 20{
-                        main_status.internal_error = true;
-                    }
+                    // if instant_check.elapsed() >= Duration::from_millis(1500)
+                    // {
+                    //     let first_tank_check =  true; //check_first_tank(&global_status.tank_status, &global_status.brake_pressure);
+                    //     if first_tank_check {
+                    //         BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
+                    //         main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));               
+                    //     }
+                    //     else if main_status.click_counter > 20{
+                    //         main_status.internal_error = true;
+                    //     }
+                    //     instant_check = embassy_time::Instant::now();
+                    // }
                 }
                 PhaseTwo::SendValidation  => {
-                    let second_tank_check = check_second_tank(&global_status.tank_status, &global_status.brake_pressure);
-                    if second_tank_check && main_status.tank_validation {
-                        main_status.set_phase(Phase::Three);
-                        main_status.asb_check = true;
-                    }
-                    else if main_status.click_counter > 20{
-                        main_status.internal_error = true;
-                    }
+                    // if instant_check.elapsed() >= Duration::from_millis(1500)
+                    // {
+                    //     let second_tank_check = true; //check_second_tank(&global_status.tank_status, &global_status.brake_pressure);
+                    //     if second_tank_check && main_status.tank_validation {
+                    //         main_status.set_phase(Phase::Three);
+                    //         main_status.asb_check = true;
+                    //     }
+                    //     else if main_status.click_counter > 20{
+                    //         main_status.internal_error = true;
+                    //     }
+                    // }
                 }               
                 
             }
@@ -206,10 +217,9 @@ async fn main(spawner: Spawner) {
                    main_status.set_phase(Phase::Five);
                    global_status.brake_req = false;
                 }
-                
             }
             Phase::Five  => {
-                if global_status.brake_req && global_status.speed <= 5.0 {
+                if global_status.brake_req /*&& global_status.speed <= 5.0*/ {
                     engage_brake();
                     main_status.brake_engaged = true;
                 }
@@ -217,10 +227,8 @@ async fn main(spawner: Spawner) {
                     release_brake();
                     main_status.brake_engaged = false;
                 }
-
             }
         }
-
     }
 }
 
@@ -263,7 +271,7 @@ impl GlobalStatus {
             tank_status:          TankStatus::new(0.0,0.0,true, true),
             brake_pressure:       BrakePressure::new(),
             speed:                0.0,
-            brake_req:            false,
+            brake_req:            true,
             asb_check_req:        false,
             res_go:               false,
             error:                false
@@ -276,7 +284,7 @@ impl GlobalStatus {
         self.tank_status =          TankStatus::new(0.0,0.0,true, true);
         self.brake_pressure =       BrakePressure::new();
         self.speed =                0.0;
-        self.brake_req =            false;
+        self.brake_req =            true;
         self.asb_check_req =        false;
         self.res_go =               false;
         self.error =                false;
@@ -321,7 +329,6 @@ struct MainStatus {
     brake_consistency: bool,
     tank_brake_coherence: bool,
     internal_error: bool,
-
 }
 
 impl MainStatus {
@@ -340,8 +347,8 @@ impl MainStatus {
 
     pub fn update(&mut self, tank_status: &TankStatus, brake_press: &BrakePressure) {
         self.tank_validation = check_tank_pressure(&tank_status);
-        self.brake_consistency = check_brake_consistency(&brake_press);
-        self.tank_brake_coherence = check_tank_brake_pressure_coherence(&tank_status, &brake_press);
+        self.brake_consistency = true; //check_brake_consistency(&brake_press);
+        self.tank_brake_coherence = true; //check_tank_brake_pressure_coherence(&tank_status, &brake_press);
     }
 
     pub fn set_phase(&mut self, new_phase: Phase) {

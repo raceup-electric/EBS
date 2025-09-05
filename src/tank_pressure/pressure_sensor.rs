@@ -6,10 +6,6 @@ use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
 use crate::TANK_STATUS;
 use crate::TankStatus;  
 
-
-
-
-
 pub const N_NEW_SAMPLES: usize = 10;
 
 pub struct TankPressureSensor {
