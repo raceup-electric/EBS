@@ -156,12 +156,13 @@ async fn main(spawner: Spawner) {
                 if global_status.asb_check_req {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
-
+                /*
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
                     main_status.internal_error = true;
                 } else {
                     main_status.internal_error = false;
                 }
+                */
             }
             Phase::Two(subphase) => match subphase {
                 PhaseTwo::FirstTankCheck => {
