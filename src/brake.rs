@@ -1,22 +1,22 @@
-use embassy_stm32::gpio::{Output, Level, Speed};
+use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::{PC6, PC7};
 pub enum BrakeSignal {
     Engage,
     Release,
     TankOneCheck,
-    TankTwoCheck
+    TankTwoCheck,
+    DoubleBrake,
 }
 
-#[derive(defmt::Format)]
-#[derive(PartialEq)]
+#[derive(defmt::Format, PartialEq)]
 pub enum BrakeStatus {
     Engaged,
-    Released
+    Released,
 }
 
 pub enum Tank {
     One,
-    Two
+    Two,
 }
 pub struct BrakeController {
     pin1: Output<'static>,
@@ -30,7 +30,7 @@ impl BrakeController {
         Self {
             pin1: Output::new(pin1, Level::High, Speed::Low),
             pin2: Output::new(pin2, Level::High, Speed::Low),
-            last_tank_utilized : Tank::One,
+            last_tank_utilized: Tank::One,
             status: BrakeStatus::Released,
         }
     }
@@ -38,16 +38,18 @@ impl BrakeController {
     pub fn engage(&mut self) {
         if self.status == BrakeStatus::Released {
             match self.last_tank_utilized {
-                Tank::One => { //now brake realising second tank
+                Tank::One => {
+                    //now brake realising second tank
                     self.pin1.set_high();
                     self.pin2.set_low();
                     self.last_tank_utilized = Tank::Two;
                 }
-                Tank::Two => { //now brake realising first tank
+                Tank::Two => {
+                    //now brake realising first tank
                     self.pin1.set_low();
                     self.pin2.set_high();
                     self.last_tank_utilized = Tank::One;
-                }    
+                }
             }
             self.status = BrakeStatus::Engaged;
         }
@@ -61,12 +63,12 @@ impl BrakeController {
 
     pub fn handle_signal(&mut self, signal: BrakeSignal) {
         match signal {
-            BrakeSignal::Engage =>  {
+            BrakeSignal::Engage => {
                 self.engage();
                 self.status = BrakeStatus::Engaged;
             }
-                
-            BrakeSignal::Release =>  {
+
+            BrakeSignal::Release => {
                 self.release();
                 self.status = BrakeStatus::Released;
             }
@@ -82,6 +84,11 @@ impl BrakeController {
                 self.pin1.set_high();
                 self.pin2.set_low();
                 self.last_tank_utilized = Tank::Two;
+            }
+
+            BrakeSignal::DoubleBrake => {
+                self.pin1.set_low();
+                self.pin2.set_low();
             }
         }
     }

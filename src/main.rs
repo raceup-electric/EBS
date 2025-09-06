@@ -31,8 +31,8 @@ use brake::BrakeController;
 use brake::BrakeSignal;
 use can_management::can_controller::CanController;
 use can_management::messages::{
-    CarMission, CarMissionStatus, CarMissionStatusMission, CarStatus, CheckAsbReq, EbsBrakeReq,
-    EbsStatus, HydraulicPressure, ResGo,
+    CarMission, CarMissionStatus, CarMissionStatusAsStatus, CarMissionStatusMission, CarStatus,
+    CheckAsbReq, EbsBrakeReq, EbsStatus, HydraulicPressure, ResGo,
 };
 use config::pressure_thresholds::*;
 use tank_pressure::pressure_sensor::{tank_pressure_monitor, TankPressureSensor};
@@ -168,31 +168,39 @@ async fn main(spawner: Spawner) {
                 PhaseTwo::FirstTankCheck => {
                     BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
                     main_status.brake_engaged = true;
-                    main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
-                }
-                PhaseTwo::SecondTankCheck => {
-                    let first_tank_check =
-                        check_first_tank(&global_status.tank_status, &global_status.brake_pressure);
-                    if main_status.click_counter > 5 && first_tank_check {
-                        BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
-                        main_status.set_phase(Phase::Two(PhaseTwo::SendValidation));
-                    } else if main_status.click_counter > 50 {
-                        main_status.internal_error = true;
+                    if main_status.click_counter > 100 {
+                        //5 sec fase flip
+                        let first_tank_check = check_first_tank(
+                            &global_status.tank_status,
+                            &global_status.brake_pressure,
+                        );
+                        if first_tank_check {
+                            main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
+                        } else {
+                            main_status.internal_error = true;
+                        }
                     }
                 }
-                PhaseTwo::SendValidation => {
-                    let second_tank_check = check_second_tank(
-                        &global_status.tank_status,
-                        &global_status.brake_pressure,
-                    );
-                    if main_status.click_counter > 5
-                        && second_tank_check
-                        && main_status.tank_validation
-                    {
+                PhaseTwo::SecondTankCheck => {
+                    BRAKE_SIGNAL.signal(BrakeSignal::DoubleBrake);
+                    if main_status.click_counter > 10 {
+                        BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
+                    }
+                    if main_status.click_counter > 100 {
+                        let second_tank_check = check_second_tank(
+                            &global_status.tank_status,
+                            &global_status.brake_pressure,
+                        );
+                        if second_tank_check {
+                            main_status.set_phase(Phase::Two(PhaseTwo::TankValidation));
+                        } else {
+                            main_status.internal_error = true;
+                        }
+                    }
+                }
+                PhaseTwo::TankValidation => {
+                    if main_status.tank_validation {
                         main_status.set_phase(Phase::Three);
-                        main_status.asb_check = true;
-                    } else if main_status.click_counter > 50 {
-                        main_status.internal_error = true;
                     }
                 }
             },
@@ -420,7 +428,7 @@ impl Phase {
 enum PhaseTwo {
     FirstTankCheck,
     SecondTankCheck,
-    SendValidation,
+    TankValidation,
 }
 
 #[derive(Debug)]
@@ -553,11 +561,7 @@ async fn can_reader(mut rx: CanRx<'static>) {
                         }
                     }
 
-                    ResGo::MESSAGE_ID => {
-                        GO.signal(());
-                    }
-
-                    CarMission::MESSAGE_ID => {
+                    CarMissionStatus::MESSAGE_ID => {
                         if let Ok(msg) = CarMissionStatus::try_from(payload) {
                             MISSION.signal(match msg.mission() {
                                 CarMissionStatusMission::DvEbsTest => Mission::EBStest,
@@ -569,7 +573,10 @@ async fn can_reader(mut rx: CanRx<'static>) {
                                 CarMissionStatusMission::DvInspection => Mission::DVinspection,
                                 CarMissionStatusMission::None => Mission::None,
                                 _ => Mission::None,
-                            })
+                            });
+                            if msg.as_status() == CarMissionStatusAsStatus::Ready {
+                                GO.signal(());
+                            }
                         }
                     }
 
