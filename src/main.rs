@@ -137,13 +137,13 @@ async fn main(spawner: Spawner) {
         }
 
         // debug usb
-        if embassy_time::Instant::now().as_millis() - time > 2000u64 {
-            info!("** GLOBAL STATUS **\n    Mission: {}\n    Tank Status -> T1 {}, T2 {}, S1 {}, S2 {}\n    Brake Pressure Front: {}, Brake Pressure Rear: {}\n    ASB Brake Request: {}\n    Brake Request: {}\n    Res Go: {}\n    Error: {}\n", global_status.mission.as_raw(),
-            global_status.tank_status.tank_one_pressure, global_status.tank_status.tank_two_pressure, global_status.tank_status.sensor_one_sanity, global_status.tank_status.sensor_two_sanity, global_status.brake_pressure.front, global_status.brake_pressure.rear, global_status.asb_check_req, global_status.brake_req, global_status.res_go, global_status.error);
-            info!("** MAIN STATUS**\n    Phase: {}\n    Click Counter: {}\n    Tank Validation: {}\n    ASB Check: {}\n    Brake engaged: {}\n    Brake Consistency: {}\n    Tank Brake Coherence: {}\n    Internal Error: {}\n", main_status.phase.value(), main_status.click_counter, main_status.tank_validation,
-            main_status.asb_check, main_status.brake_engaged, main_status.brake_consistency, main_status.tank_brake_coherence, main_status.internal_error);
-            time = embassy_time::Instant::now().as_millis();
-        }
+        // if embassy_time::Instant::now().as_millis() - time > 100u64 {
+        //     info!("** GLOBAL STATUS **\n    Mission: {}\n    Tank Status -> T1 {}, T2 {}, S1 {}, S2 {}\n    Brake Pressure Front: {}, Brake Pressure Rear: {}\n    ASB Brake Request: {}\n    Brake Request: {}\n    Res Go: {}\n    Error: {}\n", global_status.mission.as_raw(),
+        //     global_status.tank_status.tank_one_pressure, global_status.tank_status.tank_two_pressure, global_status.tank_status.sensor_one_sanity, global_status.tank_status.sensor_two_sanity, global_status.brake_pressure.front, global_status.brake_pressure.rear, global_status.asb_check_req, global_status.brake_req, global_status.res_go, global_status.error);
+        //     info!("** MAIN STATUS**\n    Phase: {}\n    Click Counter: {}\n    Tank Validation: {}\n    ASB Check: {}\n    Brake engaged: {}\n    Brake Consistency: {}\n    Tank Brake Coherence: {}\n    Internal Error: {}\n", main_status.phase.value(), main_status.click_counter, main_status.tank_validation,
+        //     main_status.asb_check, main_status.brake_engaged, main_status.brake_consistency, main_status.tank_brake_coherence, main_status.internal_error);
+        //     time = embassy_time::Instant::now().as_millis();
+        // }
 
         match main_status.phase {
             Phase::Zero => {
@@ -156,6 +156,7 @@ async fn main(spawner: Spawner) {
                 if global_status.asb_check_req {
                     main_status.set_phase(Phase::Two(PhaseTwo::FirstTankCheck))
                 }
+                BRAKE_SIGNAL.signal(BrakeSignal::DoubleBrake);
                 /*
                 if !main_status.tank_brake_coherence && main_status.click_counter >= 50 {
                     main_status.internal_error = true;
@@ -175,8 +176,10 @@ async fn main(spawner: Spawner) {
                             &global_status.brake_pressure,
                         );
                         if first_tank_check {
+                            info!("Finish 1");
                             main_status.set_phase(Phase::Two(PhaseTwo::SecondTankCheck));
                         } else {
+                            info!("Error 1");
                             main_status.internal_error = true;
                         }
                     }
@@ -184,6 +187,7 @@ async fn main(spawner: Spawner) {
                 PhaseTwo::SecondTankCheck => {
                     BRAKE_SIGNAL.signal(BrakeSignal::DoubleBrake);
                     if main_status.click_counter > 10 {
+                        info!("Subphase 2");
                         BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
                     }
                     if main_status.click_counter > 100 {
@@ -192,14 +196,17 @@ async fn main(spawner: Spawner) {
                             &global_status.brake_pressure,
                         );
                         if second_tank_check {
+                            info!("Last");
                             main_status.set_phase(Phase::Two(PhaseTwo::TankValidation));
                         } else {
+                            info!("error 2");
                             main_status.internal_error = true;
                         }
                     }
                 }
                 PhaseTwo::TankValidation => {
                     if main_status.tank_validation {
+                        main_status.asb_check = true;
                         main_status.set_phase(Phase::Three);
                     }
                 }
@@ -342,8 +349,18 @@ impl MainStatus {
 
     pub fn update(&mut self, tank_status: &TankStatus, brake_press: &BrakePressure) {
         self.tank_validation = check_tank_pressure(&tank_status);
-        self.brake_consistency = check_brake_consistency(&brake_press);
-        self.tank_brake_coherence = check_tank_brake_pressure_coherence(&tank_status, &brake_press);
+        if self.phase == Phase::Five {
+            if !self.brake_engaged {
+                self.brake_consistency = true;
+                self.tank_brake_coherence = true;
+            } else {
+                self.brake_consistency = check_brake_consistency(&brake_press);
+                self.tank_brake_coherence = check_tank_brake_pressure_coherence(&tank_status, &brake_press);
+            }
+        } else {
+            self.brake_consistency = check_brake_consistency(&brake_press);
+            self.tank_brake_coherence = check_tank_brake_pressure_coherence(&tank_status, &brake_press);
+        }
     }
 
     pub fn set_phase(&mut self, new_phase: Phase) {
@@ -406,9 +423,9 @@ enum Phase {
     Zero = 0,          // not in dv mission
     One = 1,           // sdc open, validation brake
     Two(PhaseTwo) = 2, // ASB check
-    Three,             // brake engaged, validation brake
-    Four,              // Ready to Drive, wait for GO
-    Five,              // running: Continous Monitoring and Brake Service
+    Three = 3,             // brake engaged, validation brake
+    Four = 4,              // Ready to Drive, wait for GO
+    Five = 5,              // running: Continous Monitoring and Brake Service
 }
 
 impl Phase {
@@ -472,10 +489,13 @@ fn check_tank_brake_pressure_coherence(
 }
 
 fn check_first_tank(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
-    brake_press.front > FRONT_PRESS_MULT * tank_status.tank_one_pressure
+    let i = brake_press.front > FRONT_PRESS_MULT * tank_status.tank_one_pressure
         && brake_press.rear > REAR_PRESS_MULT * tank_status.tank_one_pressure
         && brake_press.front > MIN_FRONT_PRESS
-        && brake_press.rear > MIN_REAR_PRESS
+        && brake_press.rear > MIN_REAR_PRESS;
+    info!("value: {}", i);
+    info!("Front: {}, Rear: {}", brake_press.front, brake_press.rear);
+    i
 }
 
 fn check_second_tank(tank_status: &TankStatus, brake_press: &BrakePressure) -> bool {
@@ -549,8 +569,6 @@ async fn can_reader(mut rx: CanRx<'static>) {
                 match id {
                     CarStatus::MESSAGE_ID => {
                         if let Ok(msg) = CarStatus::try_from(payload) {
-                            BRAKE_PRESSURE
-                                .signal((msg.brake_front_press(), msg.brake_rear_press()));
                             SPEED.signal(msg.speed().into());
                         }
                     }
@@ -574,7 +592,7 @@ async fn can_reader(mut rx: CanRx<'static>) {
                                 CarMissionStatusMission::None => Mission::None,
                                 _ => Mission::None,
                             });
-                            if msg.as_status() == CarMissionStatusAsStatus::Ready {
+                            if msg.as_status() == CarMissionStatusAsStatus::Driving {
                                 GO.signal(());
                             }
                         }
