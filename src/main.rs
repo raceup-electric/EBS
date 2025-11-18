@@ -200,6 +200,7 @@ async fn main(spawner: Spawner) {
                 }
                 PhaseTwo::TankValidation => {
                     if main_status.tank_validation {
+                        main_status.asb_check = true;
                         main_status.set_phase(Phase::Three);
                     }
                 }
