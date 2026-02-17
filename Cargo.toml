@@ -1,7 +1,7 @@
 [package]
 name = "EBS"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 embassy-stm32 = { version = "^0.2.0", features = ["defmt", "stm32f405rg", "unstable-pac", "memory-x", "time-driver-any", "exti", "chrono", "low-power"] }

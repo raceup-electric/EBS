@@ -18,10 +18,10 @@ pub enum Tank {
     One,
     Two,
 }
+
 pub struct BrakeController {
     pin1: Output<'static>,
     pin2: Output<'static>,
-    last_tank_utilized: Tank,
     status: BrakeStatus,
 }
 
@@ -30,65 +30,45 @@ impl BrakeController {
         Self {
             pin1: Output::new(pin1, Level::High, Speed::Low),
             pin2: Output::new(pin2, Level::High, Speed::Low),
-            last_tank_utilized: Tank::One,
             status: BrakeStatus::Released,
         }
     }
 
-    pub fn engage(&mut self) {
-        if self.status == BrakeStatus::Released {
-            match self.last_tank_utilized {
-                Tank::One => {
-                    //now brake realising second tank
-                    self.pin1.set_high();
-                    self.pin2.set_low();
-                    self.last_tank_utilized = Tank::Two;
-                }
-                Tank::Two => {
-                    //now brake realising first tank
-                    self.pin1.set_low();
-                    self.pin2.set_high();
-                    self.last_tank_utilized = Tank::One;
-                }
-            }
-            self.status = BrakeStatus::Engaged;
-        }
-    }
-
-    pub fn release(&mut self) {
-        self.pin1.set_high();
-        self.pin2.set_high();
-        self.status = BrakeStatus::Released;
-    }
-
-    pub fn handle_signal(&mut self, signal: BrakeSignal) {
+    pub fn handle_signal(&mut self, signal: BrakeSignal, press_tank_one: f32, press_tank_two: f32) {
         match signal {
             BrakeSignal::Engage => {
-                self.engage();
+                if press_tank_one > press_tank_two {
+                    self.pin1.set_low();
+                    self.pin2.set_high();
+                } else {
+                    self.pin1.set_high();
+                    self.pin2.set_low();
+                }
                 self.status = BrakeStatus::Engaged;
             }
 
             BrakeSignal::Release => {
-                self.release();
+                self.pin1.set_high();
+                self.pin2.set_high();
                 self.status = BrakeStatus::Released;
             }
 
             BrakeSignal::TankOneCheck => {
                 self.pin1.set_low();
                 self.pin2.set_high();
-                self.last_tank_utilized = Tank::One;
                 self.status = BrakeStatus::Engaged;
             }
 
             BrakeSignal::TankTwoCheck => {
                 self.pin1.set_high();
                 self.pin2.set_low();
-                self.last_tank_utilized = Tank::Two;
+                self.status = BrakeStatus::Engaged;
             }
 
             BrakeSignal::DoubleBrake => {
                 self.pin1.set_low();
                 self.pin2.set_low();
+                self.status = BrakeStatus::Engaged;
             }
         }
     }

@@ -1,14 +1,10 @@
-use embassy_time::Timer;
-use crate::tank_pressure::sensor::Sensor;
+use crate::TANK_STATUS;
+use crate::TankPressure;
 use crate::tank_pressure::filter_buffer::FilterBuffer;
+use crate::tank_pressure::sensor::Sensor;
 use crate::tank_pressure::utils::*;
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
-use crate::TANK_STATUS;
-use crate::TankStatus;  
-
-
-
-
+use embassy_time::Timer;
 
 pub const N_NEW_SAMPLES: usize = 10;
 
@@ -29,40 +25,34 @@ impl TankPressureSensor {
         }
     }
 
+    pub fn measure(&mut self) {
+        self.buffer1.add(self.sensor1.read());
+        self.buffer2.add(self.sensor2.read());
+    }
+
+    pub fn get_pressure_one(&self) -> f32 {
+        let voltage1 = adc_to_voltage(self.buffer1.avg());
+        voltage_to_pressure(voltage1)
+    }
+
+    pub fn get_pressure_two(&self) -> f32 {
+        let voltage2 = adc_to_voltage(self.buffer2.avg());
+        voltage_to_pressure(voltage2)
+    }
 }
 
 #[embassy_executor::task]
 pub async fn tank_pressure_monitor(sensor: &'static mut TankPressureSensor) {
     loop {
         for _ in 0..N_NEW_SAMPLES {
-            let val1 = sensor.sensor1.read();
-            let val2 = sensor.sensor2.read();
-            sensor.buffer1.add(val1);
-            sensor.buffer2.add(val2);
-
-            Timer::after_millis(10).await; //TODO, il tempo di attesa qui deve dipendere dal numero new sample e dalla frequenza di invio delle pressioni
+            sensor.measure();
+            Timer::after_millis(10).await;
         }
-
-        let voltage1 = adc_to_voltage(sensor.buffer1.avg());
-        let voltage2 = adc_to_voltage(sensor.buffer2.avg());
-
-        let pressure1 = voltage_to_pressure(voltage1);
-        let pressure2 = voltage_to_pressure(voltage2);
-
-        let sensor1_check = true; //TODO, check per i sensori in base ai valori nel
-        let sensor2_check = true;
-
-        TANK_STATUS.signal(
-            TankStatus::new(
-                pressure1,
-                pressure2,
-                sensor1_check,
-                sensor2_check,
-            )
-        );
-        Timer::after_millis(200).await;
-
-        
-
+        TANK_STATUS.signal(TankPressure::new(
+            sensor.get_pressure_one(),
+            sensor.get_pressure_two(),
+        ));
+        Timer::after_millis(1).await;
     }
 }
+
