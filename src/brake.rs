@@ -1,5 +1,6 @@
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::{PC6, PC7};
+#[allow(dead_code)]
 pub enum BrakeSignal {
     Engage,
     Release,
@@ -14,6 +15,7 @@ pub enum BrakeStatus {
     Released,
 }
 
+#[allow(dead_code)]
 pub enum Tank {
     One,
     Two,

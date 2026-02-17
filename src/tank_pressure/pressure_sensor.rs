@@ -1,8 +1,8 @@
-use crate::TANK_STATUS;
 use crate::TankPressure;
 use crate::tank_pressure::filter_buffer::FilterBuffer;
 use crate::tank_pressure::sensor::Sensor;
 use crate::tank_pressure::utils::*;
+use crate::{TANK_PRESSURE, TANK_PRESSURE_SHARED};
 use embassy_stm32::peripherals::{ADC1, ADC2, PA1, PA2};
 use embassy_time::Timer;
 
@@ -48,11 +48,10 @@ pub async fn tank_pressure_monitor(sensor: &'static mut TankPressureSensor) {
             sensor.measure();
             Timer::after_millis(10).await;
         }
-        TANK_STATUS.signal(TankPressure::new(
-            sensor.get_pressure_one(),
-            sensor.get_pressure_two(),
-        ));
+        let t1 = sensor.get_pressure_one();
+        let t2 = sensor.get_pressure_two();
+        TANK_PRESSURE_SHARED.lock(|cell| cell.borrow_mut().set(t1, t2));
+        TANK_PRESSURE.signal(TankPressure::new(t1, t2));
         Timer::after_millis(1).await;
     }
 }
-

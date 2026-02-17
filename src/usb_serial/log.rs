@@ -20,15 +20,15 @@ fn do_write(bytes: &[u8]) {
 /// — see https://defmt.ferrous-systems.com/global-logger
 unsafe impl Logger for UsbDefmt {
     fn acquire() {
-        unsafe {(&mut *(&raw mut ENCODER)).start_frame(do_write) };
+        unsafe { (&mut *(&raw mut ENCODER)).start_frame(do_write) };
     }
 
     unsafe fn write(bytes: &[u8]) {
-        (&mut *(&raw mut ENCODER)).write(bytes, do_write);
+        unsafe { (&mut *(&raw mut ENCODER)).write(bytes, do_write) };
     }
 
     unsafe fn release() {
-        (&mut *(&raw mut ENCODER)).end_frame(do_write);
+        unsafe { (&mut *(&raw mut ENCODER)).end_frame(do_write) };
     }
 
     unsafe fn flush() {
@@ -60,4 +60,3 @@ fn panic(info: &PanicInfo) -> ! {
     
     asm::udf();
 }
-

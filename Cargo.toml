@@ -3,6 +3,12 @@ name = "EBS"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+debug = []
+range_checked = []
+arb = []
+std = []
+
 [dependencies]
 embassy-stm32 = { version = "^0.2.0", features = ["defmt", "stm32f405rg", "unstable-pac", "memory-x", "time-driver-any", "exti", "chrono", "low-power"] }
 embassy-sync = { version = "^0.6.1", features = ["defmt"] }

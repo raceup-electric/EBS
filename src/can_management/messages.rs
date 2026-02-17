@@ -1,10 +1,8 @@
-#![allow(warnings)]
 // Generated code!
-#![allow(unused_comparisons, unreachable_patterns)]
+#![allow(unused_comparisons, unreachable_patterns, dead_code, unused_mut, unused_variables)]
 #![allow(clippy::let_and_return, clippy::eq_op)]
 #![allow(clippy::excessive_precision, clippy::manual_range_contains, clippy::absurd_extreme_comparisons)]
 #![deny(clippy::arithmetic_side_effects)]
-#![allow(warnings)]
 
 //! Message definitions from file `"can2.dbc"`
 //!
@@ -29,6 +27,8 @@ pub enum Messages {
     EbsStatus(EbsStatus),
     /// Asms
     Asms(Asms),
+    /// Asms_ack
+    AsmsAck(AsmsAck),
     /// CarMission
     CarMission(CarMission),
     /// PcuFault
@@ -154,6 +154,7 @@ impl Messages {
             32 => Messages::ResGo(ResGo::try_from(payload)?),
             60 => Messages::EbsStatus(EbsStatus::try_from(payload)?),
             65 => Messages::Asms(Asms::try_from(payload)?),
+            66 => Messages::AsmsAck(AsmsAck::try_from(payload)?),
             71 => Messages::CarMission(CarMission::try_from(payload)?),
             81 => Messages::PcuFault(PcuFault::try_from(payload)?),
             82 => Messages::Paddle(Paddle::try_from(payload)?),
@@ -617,22 +618,19 @@ impl EbsStatus {
     pub const MESSAGE_ID: u32 = 60;
     pub const DLC: u8 = 5;
     
+    pub const ASB_CHECK_MIN: u8 = 0_u8;
+    pub const ASB_CHECK_MAX: u8 = 3_u8;
     pub const PRESS_LEFT_TANK_MIN: f32 = 0_f32;
     pub const PRESS_LEFT_TANK_MAX: f32 = 10_f32;
     pub const PRESS_RIGHT_TANK_MIN: f32 = 0_f32;
     pub const PRESS_RIGHT_TANK_MAX: f32 = 10_f32;
     
     /// Construct new EbsStatus from values
-    pub fn new(system_check: bool, sanity_left_sensor: bool, sanity_right_sensor: bool, asb_check: bool, brakes_engaged: bool, brake_consistency: bool, tank_brake_coherence: bool, xnot_in_use: bool, press_left_tank: f32, press_right_tank: f32) -> Result<Self, CanError> {
+    pub fn new(system_check: bool, asb_check: u8, brakes_engaged: bool, press_left_tank: f32, press_right_tank: f32) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 5] };
         res.set_system_check(system_check)?;
-        res.set_sanity_left_sensor(sanity_left_sensor)?;
-        res.set_sanity_right_sensor(sanity_right_sensor)?;
         res.set_asb_check(asb_check)?;
         res.set_brakes_engaged(brakes_engaged)?;
-        res.set_brake_consistency(brake_consistency)?;
-        res.set_tank_brake_coherence(tank_brake_coherence)?;
-        res.set_xnot_in_use(xnot_in_use)?;
         res.set_press_left_tank(press_left_tank)?;
         res.set_press_right_tank(press_right_tank)?;
         Ok(res)
@@ -683,105 +681,48 @@ impl EbsStatus {
         Ok(())
     }
     
-    /// sanity_left_sensor
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: ""
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn sanity_left_sensor(&self) -> bool {
-        self.sanity_left_sensor_raw()
-    }
-    
-    /// Get raw value of sanity_left_sensor
-    ///
-    /// - Start bit: 1
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn sanity_left_sensor_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[1..2].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of sanity_left_sensor
-    #[inline(always)]
-    pub fn set_sanity_left_sensor(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[1..2].store_le(value);
-        Ok(())
-    }
-    
-    /// sanity_right_sensor
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: ""
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn sanity_right_sensor(&self) -> bool {
-        self.sanity_right_sensor_raw()
-    }
-    
-    /// Get raw value of sanity_right_sensor
-    ///
-    /// - Start bit: 2
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn sanity_right_sensor_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[2..3].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of sanity_right_sensor
-    #[inline(always)]
-    pub fn set_sanity_right_sensor(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[2..3].store_le(value);
-        Ok(())
-    }
-    
     /// ASB_check
     ///
     /// - Min: 0
-    /// - Max: 1
-    /// - Unit: ""
+    /// - Max: 3
+    /// - Unit: "asb_phase"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn asb_check(&self) -> bool {
-        self.asb_check_raw()
+    pub fn asb_check(&self) -> EbsStatusAsbCheck {
+        let signal = self.raw.view_bits::<Lsb0>()[1..3].load_le::<u8>();
+        
+        match signal {
+            3 => EbsStatusAsbCheck::Failed,
+            2 => EbsStatusAsbCheck::Passed,
+            1 => EbsStatusAsbCheck::Ongoing,
+            0 => EbsStatusAsbCheck::NotRequested,
+            _ => EbsStatusAsbCheck::_Other(self.asb_check_raw()),
+        }
     }
     
     /// Get raw value of ASB_check
     ///
-    /// - Start bit: 3
-    /// - Signal size: 1 bits
+    /// - Start bit: 1
+    /// - Signal size: 2 bits
     /// - Factor: 1
     /// - Offset: 0
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn asb_check_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[3..4].load_le::<u8>();
+    pub fn asb_check_raw(&self) -> u8 {
+        let signal = self.raw.view_bits::<Lsb0>()[1..3].load_le::<u8>();
         
-        signal == 1
+        signal
     }
     
     /// Set value of ASB_check
     #[inline(always)]
-    pub fn set_asb_check(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[3..4].store_le(value);
+    pub fn set_asb_check(&mut self, value: u8) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u8 || 3_u8 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 60 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[1..3].store_le(value);
         Ok(())
     }
     
@@ -798,7 +739,7 @@ impl EbsStatus {
     
     /// Get raw value of brakes_engaged
     ///
-    /// - Start bit: 4
+    /// - Start bit: 3
     /// - Signal size: 1 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -806,7 +747,7 @@ impl EbsStatus {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn brakes_engaged_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[4..5].load_le::<u8>();
+        let signal = self.raw.view_bits::<Lsb0>()[3..4].load_le::<u8>();
         
         signal == 1
     }
@@ -815,109 +756,7 @@ impl EbsStatus {
     #[inline(always)]
     pub fn set_brakes_engaged(&mut self, value: bool) -> Result<(), CanError> {
         let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[4..5].store_le(value);
-        Ok(())
-    }
-    
-    /// brake_consistency
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: ""
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn brake_consistency(&self) -> bool {
-        self.brake_consistency_raw()
-    }
-    
-    /// Get raw value of brake_consistency
-    ///
-    /// - Start bit: 5
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn brake_consistency_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[5..6].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of brake_consistency
-    #[inline(always)]
-    pub fn set_brake_consistency(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[5..6].store_le(value);
-        Ok(())
-    }
-    
-    /// tank_brake_coherence
-    ///
-    /// - Min: 0
-    /// - Max: 1
-    /// - Unit: ""
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn tank_brake_coherence(&self) -> bool {
-        self.tank_brake_coherence_raw()
-    }
-    
-    /// Get raw value of tank_brake_coherence
-    ///
-    /// - Start bit: 6
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn tank_brake_coherence_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[6..7].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of tank_brake_coherence
-    #[inline(always)]
-    pub fn set_tank_brake_coherence(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[6..7].store_le(value);
-        Ok(())
-    }
-    
-    /// _NOT_IN_USE
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: ""
-    /// - Receivers: Vector__XXX
-    #[inline(always)]
-    pub fn xnot_in_use(&self) -> bool {
-        self.xnot_in_use_raw()
-    }
-    
-    /// Get raw value of _NOT_IN_USE
-    ///
-    /// - Start bit: 7
-    /// - Signal size: 1 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn xnot_in_use_raw(&self) -> bool {
-        let signal = self.raw.view_bits::<Lsb0>()[7..8].load_le::<u8>();
-        
-        signal == 1
-    }
-    
-    /// Set value of _NOT_IN_USE
-    #[inline(always)]
-    pub fn set_xnot_in_use(&mut self, value: bool) -> Result<(), CanError> {
-        let value = value as u8;
-        self.raw.view_bits_mut::<Lsb0>()[7..8].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[3..4].store_le(value);
         Ok(())
     }
     
@@ -1027,13 +866,8 @@ impl core::fmt::Debug for EbsStatus {
         if f.alternate() {
             f.debug_struct("EbsStatus")
                 .field("system_check", &self.system_check())
-                .field("sanity_left_sensor", &self.sanity_left_sensor())
-                .field("sanity_right_sensor", &self.sanity_right_sensor())
                 .field("asb_check", &self.asb_check())
                 .field("brakes_engaged", &self.brakes_engaged())
-                .field("brake_consistency", &self.brake_consistency())
-                .field("tank_brake_coherence", &self.tank_brake_coherence())
-                .field("xnot_in_use", &self.xnot_in_use())
                 .field("press_left_tank", &self.press_left_tank())
                 .field("press_right_tank", &self.press_right_tank())
             .finish()
@@ -1047,18 +881,36 @@ impl core::fmt::Debug for EbsStatus {
 impl<'a> Arbitrary<'a> for EbsStatus {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let system_check = u.int_in_range(0..=1)? == 1;
-        let sanity_left_sensor = u.int_in_range(0..=1)? == 1;
-        let sanity_right_sensor = u.int_in_range(0..=1)? == 1;
-        let asb_check = u.int_in_range(0..=1)? == 1;
+        let asb_check = u.int_in_range(0..=3)?;
         let brakes_engaged = u.int_in_range(0..=1)? == 1;
-        let brake_consistency = u.int_in_range(0..=1)? == 1;
-        let tank_brake_coherence = u.int_in_range(0..=1)? == 1;
-        let xnot_in_use = u.int_in_range(0..=1)? == 1;
         let press_left_tank = u.float_in_range(0_f32..=10_f32)?;
         let press_right_tank = u.float_in_range(0_f32..=10_f32)?;
-        EbsStatus::new(system_check,sanity_left_sensor,sanity_right_sensor,asb_check,brakes_engaged,brake_consistency,tank_brake_coherence,xnot_in_use,press_left_tank,press_right_tank).map_err(|_| arbitrary::Error::IncorrectFormat)
+        EbsStatus::new(system_check,asb_check,brakes_engaged,press_left_tank,press_right_tank).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
+/// Defined values for ASB_check
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub enum EbsStatusAsbCheck {
+    Failed,
+    Passed,
+    Ongoing,
+    NotRequested,
+    _Other(u8),
+}
+
+impl From<EbsStatusAsbCheck> for u8 {
+    fn from(val: EbsStatusAsbCheck) -> u8 {
+        match val {
+            EbsStatusAsbCheck::Failed => 3,
+            EbsStatusAsbCheck::Passed => 2,
+            EbsStatusAsbCheck::Ongoing => 1,
+            EbsStatusAsbCheck::NotRequested => 0,
+            EbsStatusAsbCheck::_Other(x) => x,
+        }
+    }
+}
+
 
 /// Asms
 ///
@@ -1159,6 +1011,108 @@ impl<'a> Arbitrary<'a> for Asms {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let asms_sens = u.int_in_range(0..=1)? == 1;
         Asms::new(asms_sens).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+/// Asms_ack
+///
+/// - ID: 66 (0x42)
+/// - Size: 1 bytes
+/// - Transmitter: VCU
+#[derive(Clone, Copy)]
+pub struct AsmsAck {
+    raw: [u8; 1],
+}
+
+impl AsmsAck {
+    pub const MESSAGE_ID: u32 = 66;
+    pub const DLC: u8 = 1;
+    
+    
+    /// Construct new Asms_ack from values
+    pub fn new(asms_sens: bool) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 1] };
+        res.set_asms_sens(asms_sens)?;
+        Ok(res)
+    }
+    
+    /// Construct new Asms_ack from raw
+    pub fn new_from_raw(raw: [u8;1] ) -> Result<Self, CanError> {
+        let res = Self { raw };
+        Ok(res)
+    }
+    
+    /// Access message payload raw value
+    pub fn raw(&self) -> &[u8; 1] {
+        &self.raw
+    }
+    
+    /// Asms_sens
+    ///
+    /// - Min: 0
+    /// - Max: 1
+    /// - Unit: "High"
+    /// - Receivers: Vector__XXX
+    #[inline(always)]
+    pub fn asms_sens(&self) -> bool {
+        self.asms_sens_raw()
+    }
+    
+    /// Get raw value of Asms_sens
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 1 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn asms_sens_raw(&self) -> bool {
+        let signal = self.raw.view_bits::<Lsb0>()[0..1].load_le::<u8>();
+        
+        signal == 1
+    }
+    
+    /// Set value of Asms_sens
+    #[inline(always)]
+    pub fn set_asms_sens(&mut self, value: bool) -> Result<(), CanError> {
+        let value = value as u8;
+        self.raw.view_bits_mut::<Lsb0>()[0..1].store_le(value);
+        Ok(())
+    }
+    
+}
+
+impl core::convert::TryFrom<&[u8]> for AsmsAck {
+    type Error = CanError;
+    
+    #[inline(always)]
+    fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
+        if payload.len() < 1 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 1];
+        raw.copy_from_slice(&payload[..1]);
+        Ok(Self { raw })
+    }
+}
+
+#[cfg(feature = "debug")]
+impl core::fmt::Debug for AsmsAck {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("AsmsAck")
+                .field("asms_sens", &self.asms_sens())
+            .finish()
+        } else {
+            f.debug_tuple("AsmsAck").field(&self.raw).finish()
+        }
+    }
+}
+
+#[cfg(feature = "arb")]
+impl<'a> Arbitrary<'a> for AsmsAck {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let asms_sens = u.int_in_range(0..=1)? == 1;
+        AsmsAck::new(asms_sens).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -5909,21 +5863,21 @@ impl Temp1 {
     pub const MESSAGE_ID: u32 = 256;
     pub const DLC: u8 = 8;
     
+    pub const TEMP_POST_RR_MIN: u16 = 0_u16;
+    pub const TEMP_POST_RR_MAX: u16 = 0_u16;
     pub const TEMP_POST_FR_MIN: u16 = 0_u16;
     pub const TEMP_POST_FR_MAX: u16 = 0_u16;
     pub const TEMP_POST_RAD_R_MIN: u16 = 0_u16;
     pub const TEMP_POST_RAD_R_MAX: u16 = 0_u16;
-    pub const TEMP_POST_RR_MIN: u16 = 0_u16;
-    pub const TEMP_POST_RR_MAX: u16 = 0_u16;
     pub const TEMP_POST_RAD_L_MIN: u16 = 0_u16;
     pub const TEMP_POST_RAD_L_MAX: u16 = 0_u16;
     
     /// Construct new Temp1 from values
-    pub fn new(temp_post_fr: u16, temp_post_rad_r: u16, temp_post_rr: u16, temp_post_rad_l: u16) -> Result<Self, CanError> {
+    pub fn new(temp_post_rr: u16, temp_post_fr: u16, temp_post_rad_r: u16, temp_post_rad_l: u16) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 8] };
+        res.set_temp_post_rr(temp_post_rr)?;
         res.set_temp_post_fr(temp_post_fr)?;
         res.set_temp_post_rad_r(temp_post_rad_r)?;
-        res.set_temp_post_rr(temp_post_rr)?;
         res.set_temp_post_rad_l(temp_post_rad_l)?;
         Ok(res)
     }
@@ -5939,6 +5893,43 @@ impl Temp1 {
         &self.raw
     }
     
+    /// temp_post_rr
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: "C"
+    /// - Receivers: VCU
+    #[inline(always)]
+    pub fn temp_post_rr(&self) -> u16 {
+        self.temp_post_rr_raw()
+    }
+    
+    /// Get raw value of temp_post_rr
+    ///
+    /// - Start bit: 0
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn temp_post_rr_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[0..16].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of temp_post_rr
+    #[inline(always)]
+    pub fn set_temp_post_rr(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 256 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[0..16].store_le(value);
+        Ok(())
+    }
+    
     /// temp_post_fr
     ///
     /// - Min: 0
@@ -5952,7 +5943,7 @@ impl Temp1 {
     
     /// Get raw value of temp_post_fr
     ///
-    /// - Start bit: 0
+    /// - Start bit: 16
     /// - Signal size: 16 bits
     /// - Factor: 1
     /// - Offset: 0
@@ -5960,7 +5951,7 @@ impl Temp1 {
     /// - Value type: Unsigned
     #[inline(always)]
     pub fn temp_post_fr_raw(&self) -> u16 {
-        let signal = self.raw.view_bits::<Lsb0>()[0..16].load_le::<u16>();
+        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
         
         signal
     }
@@ -5972,7 +5963,7 @@ impl Temp1 {
         if value < 0_u16 || 0_u16 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 256 });
         }
-        self.raw.view_bits_mut::<Lsb0>()[0..16].store_le(value);
+        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
         Ok(())
     }
     
@@ -5989,43 +5980,6 @@ impl Temp1 {
     
     /// Get raw value of temp_post_rad_r
     ///
-    /// - Start bit: 16
-    /// - Signal size: 16 bits
-    /// - Factor: 1
-    /// - Offset: 0
-    /// - Byte order: LittleEndian
-    /// - Value type: Unsigned
-    #[inline(always)]
-    pub fn temp_post_rad_r_raw(&self) -> u16 {
-        let signal = self.raw.view_bits::<Lsb0>()[16..32].load_le::<u16>();
-        
-        signal
-    }
-    
-    /// Set value of temp_post_rad_r
-    #[inline(always)]
-    pub fn set_temp_post_rad_r(&mut self, value: u16) -> Result<(), CanError> {
-        #[cfg(feature = "range_checked")]
-        if value < 0_u16 || 0_u16 < value {
-            return Err(CanError::ParameterOutOfRange { message_id: 256 });
-        }
-        self.raw.view_bits_mut::<Lsb0>()[16..32].store_le(value);
-        Ok(())
-    }
-    
-    /// temp_post_rr
-    ///
-    /// - Min: 0
-    /// - Max: 0
-    /// - Unit: "C"
-    /// - Receivers: VCU
-    #[inline(always)]
-    pub fn temp_post_rr(&self) -> u16 {
-        self.temp_post_rr_raw()
-    }
-    
-    /// Get raw value of temp_post_rr
-    ///
     /// - Start bit: 32
     /// - Signal size: 16 bits
     /// - Factor: 1
@@ -6033,15 +5987,15 @@ impl Temp1 {
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn temp_post_rr_raw(&self) -> u16 {
+    pub fn temp_post_rad_r_raw(&self) -> u16 {
         let signal = self.raw.view_bits::<Lsb0>()[32..48].load_le::<u16>();
         
         signal
     }
     
-    /// Set value of temp_post_rr
+    /// Set value of temp_post_rad_r
     #[inline(always)]
-    pub fn set_temp_post_rr(&mut self, value: u16) -> Result<(), CanError> {
+    pub fn set_temp_post_rad_r(&mut self, value: u16) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_u16 || 0_u16 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 256 });
@@ -6106,9 +6060,9 @@ impl core::fmt::Debug for Temp1 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
             f.debug_struct("Temp1")
+                .field("temp_post_rr", &self.temp_post_rr())
                 .field("temp_post_fr", &self.temp_post_fr())
                 .field("temp_post_rad_r", &self.temp_post_rad_r())
-                .field("temp_post_rr", &self.temp_post_rr())
                 .field("temp_post_rad_l", &self.temp_post_rad_l())
             .finish()
         } else {
@@ -6120,11 +6074,11 @@ impl core::fmt::Debug for Temp1 {
 #[cfg(feature = "arb")]
 impl<'a> Arbitrary<'a> for Temp1 {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
+        let temp_post_rr = u.int_in_range(0..=0)?;
         let temp_post_fr = u.int_in_range(0..=0)?;
         let temp_post_rad_r = u.int_in_range(0..=0)?;
-        let temp_post_rr = u.int_in_range(0..=0)?;
         let temp_post_rad_l = u.int_in_range(0..=0)?;
-        Temp1::new(temp_post_fr,temp_post_rad_r,temp_post_rr,temp_post_rad_l).map_err(|_| arbitrary::Error::IncorrectFormat)
+        Temp1::new(temp_post_rr,temp_post_fr,temp_post_rad_r,temp_post_rad_l).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -6146,15 +6100,15 @@ impl Temp2 {
     pub const TEMP_POST_RL_MAX: u16 = 0_u16;
     pub const TEMP_POST_INV_L_MIN: u16 = 0_u16;
     pub const TEMP_POST_INV_L_MAX: u16 = 0_u16;
-    pub const TEMP_POST_EMB_MIN: u16 = 0_u16;
-    pub const TEMP_POST_EMB_MAX: u16 = 0_u16;
+    pub const TEMP_POST_FL_MIN: u16 = 0_u16;
+    pub const TEMP_POST_FL_MAX: u16 = 0_u16;
     
     /// Construct new Temp2 from values
-    pub fn new(temp_post_rl: u16, temp_post_inv_l: u16, temp_post_emb: u16) -> Result<Self, CanError> {
+    pub fn new(temp_post_rl: u16, temp_post_inv_l: u16, temp_post_fl: u16) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 7] };
         res.set_temp_post_rl(temp_post_rl)?;
         res.set_temp_post_inv_l(temp_post_inv_l)?;
-        res.set_temp_post_emb(temp_post_emb)?;
+        res.set_temp_post_fl(temp_post_fl)?;
         Ok(res)
     }
     
@@ -6243,18 +6197,18 @@ impl Temp2 {
         Ok(())
     }
     
-    /// temp_post_emb
+    /// temp_post_fl
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "C"
     /// - Receivers: VCU
     #[inline(always)]
-    pub fn temp_post_emb(&self) -> u16 {
-        self.temp_post_emb_raw()
+    pub fn temp_post_fl(&self) -> u16 {
+        self.temp_post_fl_raw()
     }
     
-    /// Get raw value of temp_post_emb
+    /// Get raw value of temp_post_fl
     ///
     /// - Start bit: 32
     /// - Signal size: 16 bits
@@ -6263,15 +6217,15 @@ impl Temp2 {
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn temp_post_emb_raw(&self) -> u16 {
+    pub fn temp_post_fl_raw(&self) -> u16 {
         let signal = self.raw.view_bits::<Lsb0>()[32..48].load_le::<u16>();
         
         signal
     }
     
-    /// Set value of temp_post_emb
+    /// Set value of temp_post_fl
     #[inline(always)]
-    pub fn set_temp_post_emb(&mut self, value: u16) -> Result<(), CanError> {
+    pub fn set_temp_post_fl(&mut self, value: u16) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_u16 || 0_u16 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 257 });
@@ -6301,7 +6255,7 @@ impl core::fmt::Debug for Temp2 {
             f.debug_struct("Temp2")
                 .field("temp_post_rl", &self.temp_post_rl())
                 .field("temp_post_inv_l", &self.temp_post_inv_l())
-                .field("temp_post_emb", &self.temp_post_emb())
+                .field("temp_post_fl", &self.temp_post_fl())
             .finish()
         } else {
             f.debug_tuple("Temp2").field(&self.raw).finish()
@@ -6314,46 +6268,52 @@ impl<'a> Arbitrary<'a> for Temp2 {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let temp_post_rl = u.int_in_range(0..=0)?;
         let temp_post_inv_l = u.int_in_range(0..=0)?;
-        let temp_post_emb = u.int_in_range(0..=0)?;
-        Temp2::new(temp_post_rl,temp_post_inv_l,temp_post_emb).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let temp_post_fl = u.int_in_range(0..=0)?;
+        Temp2::new(temp_post_rl,temp_post_inv_l,temp_post_fl).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
 /// SuspRear
 ///
 /// - ID: 258 (0x102)
-/// - Size: 3 bytes
+/// - Size: 7 bytes
 /// - Transmitter: SMUR
 #[derive(Clone, Copy)]
 pub struct SuspRear {
-    raw: [u8; 3],
+    raw: [u8; 7],
 }
 
 impl SuspRear {
     pub const MESSAGE_ID: u32 = 258;
-    pub const DLC: u8 = 3;
+    pub const DLC: u8 = 7;
     
     pub const SUSP_RR_MIN: f32 = 0_f32;
     pub const SUSP_RR_MAX: f32 = 0_f32;
     pub const SUSP_RL_MIN: f32 = 0_f32;
     pub const SUSP_RL_MAX: f32 = 0_f32;
+    pub const ADC_SUSP_RR_MIN: u16 = 0_u16;
+    pub const ADC_SUSP_RR_MAX: u16 = 0_u16;
+    pub const ADC_SUSP_RL_MIN: u16 = 0_u16;
+    pub const ADC_SUSP_RL_MAX: u16 = 0_u16;
     
     /// Construct new SuspRear from values
-    pub fn new(susp_rr: f32, susp_rl: f32) -> Result<Self, CanError> {
-        let mut res = Self { raw: [0u8; 3] };
+    pub fn new(susp_rr: f32, susp_rl: f32, adc_susp_rr: u16, adc_susp_rl: u16) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 7] };
         res.set_susp_rr(susp_rr)?;
         res.set_susp_rl(susp_rl)?;
+        res.set_adc_susp_rr(adc_susp_rr)?;
+        res.set_adc_susp_rl(adc_susp_rl)?;
         Ok(res)
     }
     
     /// Construct new SuspRear from raw
-    pub fn new_from_raw(raw: [u8;3] ) -> Result<Self, CanError> {
+    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
         let res = Self { raw };
         Ok(res)
     }
     
     /// Access message payload raw value
-    pub fn raw(&self) -> &[u8; 3] {
+    pub fn raw(&self) -> &[u8; 7] {
         &self.raw
     }
     
@@ -6447,6 +6407,80 @@ impl SuspRear {
         Ok(())
     }
     
+    /// adc_susp_rr
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: VCU
+    #[inline(always)]
+    pub fn adc_susp_rr(&self) -> u16 {
+        self.adc_susp_rr_raw()
+    }
+    
+    /// Get raw value of adc_susp_rr
+    ///
+    /// - Start bit: 24
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn adc_susp_rr_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[24..40].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of adc_susp_rr
+    #[inline(always)]
+    pub fn set_adc_susp_rr(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 258 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[24..40].store_le(value);
+        Ok(())
+    }
+    
+    /// adc_susp_rl
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: VCU
+    #[inline(always)]
+    pub fn adc_susp_rl(&self) -> u16 {
+        self.adc_susp_rl_raw()
+    }
+    
+    /// Get raw value of adc_susp_rl
+    ///
+    /// - Start bit: 40
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn adc_susp_rl_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[40..56].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of adc_susp_rl
+    #[inline(always)]
+    pub fn set_adc_susp_rl(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 258 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[40..56].store_le(value);
+        Ok(())
+    }
+    
 }
 
 impl core::convert::TryFrom<&[u8]> for SuspRear {
@@ -6454,9 +6488,9 @@ impl core::convert::TryFrom<&[u8]> for SuspRear {
     
     #[inline(always)]
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
-        if payload.len() < 3 { return Err(CanError::InvalidPayloadSize); }
-        let mut raw = [0u8; 3];
-        raw.copy_from_slice(&payload[..3]);
+        if payload.len() < 7 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 7];
+        raw.copy_from_slice(&payload[..7]);
         Ok(Self { raw })
     }
 }
@@ -6468,6 +6502,8 @@ impl core::fmt::Debug for SuspRear {
             f.debug_struct("SuspRear")
                 .field("susp_rr", &self.susp_rr())
                 .field("susp_rl", &self.susp_rl())
+                .field("adc_susp_rr", &self.adc_susp_rr())
+                .field("adc_susp_rl", &self.adc_susp_rl())
             .finish()
         } else {
             f.debug_tuple("SuspRear").field(&self.raw).finish()
@@ -6480,7 +6516,9 @@ impl<'a> Arbitrary<'a> for SuspRear {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let susp_rr = u.float_in_range(0_f32..=0_f32)?;
         let susp_rl = u.float_in_range(0_f32..=0_f32)?;
-        SuspRear::new(susp_rr,susp_rl).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let adc_susp_rr = u.int_in_range(0..=0)?;
+        let adc_susp_rl = u.int_in_range(0..=0)?;
+        SuspRear::new(susp_rr,susp_rl,adc_susp_rr,adc_susp_rl).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -6553,38 +6591,44 @@ impl<'a> Arbitrary<'a> for Reserved2 {
 /// SuspFront
 ///
 /// - ID: 260 (0x104)
-/// - Size: 3 bytes
+/// - Size: 7 bytes
 /// - Transmitter: SMUF
 #[derive(Clone, Copy)]
 pub struct SuspFront {
-    raw: [u8; 3],
+    raw: [u8; 7],
 }
 
 impl SuspFront {
     pub const MESSAGE_ID: u32 = 260;
-    pub const DLC: u8 = 3;
+    pub const DLC: u8 = 7;
     
     pub const SUSP_FR_MIN: f32 = 0_f32;
     pub const SUSP_FR_MAX: f32 = 0_f32;
     pub const SUSP_FL_MIN: f32 = 0_f32;
     pub const SUSP_FL_MAX: f32 = 0_f32;
+    pub const ADC_SUSP_FR_MIN: u16 = 0_u16;
+    pub const ADC_SUSP_FR_MAX: u16 = 0_u16;
+    pub const ADC_SUSP_FL_MIN: u16 = 0_u16;
+    pub const ADC_SUSP_FL_MAX: u16 = 0_u16;
     
     /// Construct new SuspFront from values
-    pub fn new(susp_fr: f32, susp_fl: f32) -> Result<Self, CanError> {
-        let mut res = Self { raw: [0u8; 3] };
+    pub fn new(susp_fr: f32, susp_fl: f32, adc_susp_fr: u16, adc_susp_fl: u16) -> Result<Self, CanError> {
+        let mut res = Self { raw: [0u8; 7] };
         res.set_susp_fr(susp_fr)?;
         res.set_susp_fl(susp_fl)?;
+        res.set_adc_susp_fr(adc_susp_fr)?;
+        res.set_adc_susp_fl(adc_susp_fl)?;
         Ok(res)
     }
     
     /// Construct new SuspFront from raw
-    pub fn new_from_raw(raw: [u8;3] ) -> Result<Self, CanError> {
+    pub fn new_from_raw(raw: [u8;7] ) -> Result<Self, CanError> {
         let res = Self { raw };
         Ok(res)
     }
     
     /// Access message payload raw value
-    pub fn raw(&self) -> &[u8; 3] {
+    pub fn raw(&self) -> &[u8; 7] {
         &self.raw
     }
     
@@ -6678,6 +6722,80 @@ impl SuspFront {
         Ok(())
     }
     
+    /// adc_susp_fr
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: VCU
+    #[inline(always)]
+    pub fn adc_susp_fr(&self) -> u16 {
+        self.adc_susp_fr_raw()
+    }
+    
+    /// Get raw value of adc_susp_fr
+    ///
+    /// - Start bit: 24
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn adc_susp_fr_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[24..40].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of adc_susp_fr
+    #[inline(always)]
+    pub fn set_adc_susp_fr(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 260 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[24..40].store_le(value);
+        Ok(())
+    }
+    
+    /// adc_susp_fl
+    ///
+    /// - Min: 0
+    /// - Max: 0
+    /// - Unit: ""
+    /// - Receivers: VCU
+    #[inline(always)]
+    pub fn adc_susp_fl(&self) -> u16 {
+        self.adc_susp_fl_raw()
+    }
+    
+    /// Get raw value of adc_susp_fl
+    ///
+    /// - Start bit: 40
+    /// - Signal size: 16 bits
+    /// - Factor: 1
+    /// - Offset: 0
+    /// - Byte order: LittleEndian
+    /// - Value type: Unsigned
+    #[inline(always)]
+    pub fn adc_susp_fl_raw(&self) -> u16 {
+        let signal = self.raw.view_bits::<Lsb0>()[40..56].load_le::<u16>();
+        
+        signal
+    }
+    
+    /// Set value of adc_susp_fl
+    #[inline(always)]
+    pub fn set_adc_susp_fl(&mut self, value: u16) -> Result<(), CanError> {
+        #[cfg(feature = "range_checked")]
+        if value < 0_u16 || 0_u16 < value {
+            return Err(CanError::ParameterOutOfRange { message_id: 260 });
+        }
+        self.raw.view_bits_mut::<Lsb0>()[40..56].store_le(value);
+        Ok(())
+    }
+    
 }
 
 impl core::convert::TryFrom<&[u8]> for SuspFront {
@@ -6685,9 +6803,9 @@ impl core::convert::TryFrom<&[u8]> for SuspFront {
     
     #[inline(always)]
     fn try_from(payload: &[u8]) -> Result<Self, Self::Error> {
-        if payload.len() < 3 { return Err(CanError::InvalidPayloadSize); }
-        let mut raw = [0u8; 3];
-        raw.copy_from_slice(&payload[..3]);
+        if payload.len() < 7 { return Err(CanError::InvalidPayloadSize); }
+        let mut raw = [0u8; 7];
+        raw.copy_from_slice(&payload[..7]);
         Ok(Self { raw })
     }
 }
@@ -6699,6 +6817,8 @@ impl core::fmt::Debug for SuspFront {
             f.debug_struct("SuspFront")
                 .field("susp_fr", &self.susp_fr())
                 .field("susp_fl", &self.susp_fl())
+                .field("adc_susp_fr", &self.adc_susp_fr())
+                .field("adc_susp_fl", &self.adc_susp_fl())
             .finish()
         } else {
             f.debug_tuple("SuspFront").field(&self.raw).finish()
@@ -6711,7 +6831,9 @@ impl<'a> Arbitrary<'a> for SuspFront {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let susp_fr = u.float_in_range(0_f32..=0_f32)?;
         let susp_fl = u.float_in_range(0_f32..=0_f32)?;
-        SuspFront::new(susp_fr,susp_fl).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let adc_susp_fr = u.int_in_range(0..=0)?;
+        let adc_susp_fl = u.int_in_range(0..=0)?;
+        SuspFront::new(susp_fr,susp_fl,adc_susp_fr,adc_susp_fl).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -6731,14 +6853,14 @@ impl TempFrontR {
     
     pub const TEMP_POST_INV_R_MIN: u16 = 0_u16;
     pub const TEMP_POST_INV_R_MAX: u16 = 0_u16;
-    pub const TEMP_POST_FL_MIN: u16 = 0_u16;
-    pub const TEMP_POST_FL_MAX: u16 = 0_u16;
+    pub const TEMP_POST_EMB_MIN: u16 = 0_u16;
+    pub const TEMP_POST_EMB_MAX: u16 = 0_u16;
     
     /// Construct new TempFrontR from values
-    pub fn new(temp_post_inv_r: u16, temp_post_fl: u16) -> Result<Self, CanError> {
+    pub fn new(temp_post_inv_r: u16, temp_post_emb: u16) -> Result<Self, CanError> {
         let mut res = Self { raw: [0u8; 3] };
         res.set_temp_post_inv_r(temp_post_inv_r)?;
-        res.set_temp_post_fl(temp_post_fl)?;
+        res.set_temp_post_emb(temp_post_emb)?;
         Ok(res)
     }
     
@@ -6790,18 +6912,18 @@ impl TempFrontR {
         Ok(())
     }
     
-    /// temp_post_fl
+    /// temp_post_emb
     ///
     /// - Min: 0
     /// - Max: 0
     /// - Unit: "C"
     /// - Receivers: Vector__XXX
     #[inline(always)]
-    pub fn temp_post_fl(&self) -> u16 {
-        self.temp_post_fl_raw()
+    pub fn temp_post_emb(&self) -> u16 {
+        self.temp_post_emb_raw()
     }
     
-    /// Get raw value of temp_post_fl
+    /// Get raw value of temp_post_emb
     ///
     /// - Start bit: 10
     /// - Signal size: 10 bits
@@ -6810,15 +6932,15 @@ impl TempFrontR {
     /// - Byte order: LittleEndian
     /// - Value type: Unsigned
     #[inline(always)]
-    pub fn temp_post_fl_raw(&self) -> u16 {
+    pub fn temp_post_emb_raw(&self) -> u16 {
         let signal = self.raw.view_bits::<Lsb0>()[10..20].load_le::<u16>();
         
         signal
     }
     
-    /// Set value of temp_post_fl
+    /// Set value of temp_post_emb
     #[inline(always)]
-    pub fn set_temp_post_fl(&mut self, value: u16) -> Result<(), CanError> {
+    pub fn set_temp_post_emb(&mut self, value: u16) -> Result<(), CanError> {
         #[cfg(feature = "range_checked")]
         if value < 0_u16 || 0_u16 < value {
             return Err(CanError::ParameterOutOfRange { message_id: 261 });
@@ -6847,7 +6969,7 @@ impl core::fmt::Debug for TempFrontR {
         if f.alternate() {
             f.debug_struct("TempFrontR")
                 .field("temp_post_inv_r", &self.temp_post_inv_r())
-                .field("temp_post_fl", &self.temp_post_fl())
+                .field("temp_post_emb", &self.temp_post_emb())
             .finish()
         } else {
             f.debug_tuple("TempFrontR").field(&self.raw).finish()
@@ -6859,8 +6981,8 @@ impl core::fmt::Debug for TempFrontR {
 impl<'a> Arbitrary<'a> for TempFrontR {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let temp_post_inv_r = u.int_in_range(0..=0)?;
-        let temp_post_fl = u.int_in_range(0..=0)?;
-        TempFrontR::new(temp_post_inv_r,temp_post_fl).map_err(|_| arbitrary::Error::IncorrectFormat)
+        let temp_post_emb = u.int_in_range(0..=0)?;
+        TempFrontR::new(temp_post_inv_r,temp_post_emb).map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -11636,4 +11758,3 @@ impl UnstructuredFloatExt for arbitrary::Unstructured<'_> {
         Ok(random)
     }
 }
-
