@@ -15,8 +15,8 @@ use embassy_time::Timer;
 use static_cell::StaticCell;
 
 use crate::can_management::messages::EbsStatusAsbCheck;
-use panic_probe as _;
 use defmt_rtt as _;
+use panic_probe as _;
 
 // use panic_probe as _;
 use embassy_stm32::can::filter::ListEntry16;
@@ -55,7 +55,7 @@ pub static TANK_PRESSURE_SHARED: Mutex<CriticalSectionRawMutex, RefCell<TankPres
     Mutex::new(RefCell::new(TankPressure::new(0.0, 0.0)));
 static BRAKE_PRESSURE: Signal<CriticalSectionRawMutex, (f32, f32)> = Signal::new();
 static BRAKE_REQ: Signal<CriticalSectionRawMutex, (bool, Timestamp)> = Signal::new();
-static ASB_CHECK_REQ: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static ASB_CHECK_REQ: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -201,8 +201,11 @@ async fn main(spawner: Spawner) {
                 //TODO: di sicuro mancano dei controlli per andare in emergency
                 if global_status.last_vcu_core2.elapsed() > Duration::from_millis(200)
                     || global_status.last_embedded.elapsed() > Duration::from_millis(200)
-                    || (global_status.brake_req && main_status.ts_last_brake.elapsed() > Duration::from_millis(200) && !main_status.brake_consistency)
-                    || (!main_status.tank_pressure_ok && main_status.ts_last_brake.elapsed() < Duration::from_millis(200))
+                    || (global_status.brake_req
+                        && main_status.ts_last_brake.elapsed() > Duration::from_millis(200)
+                        && !main_status.brake_consistency)
+                    || (!main_status.tank_pressure_ok
+                        && main_status.ts_last_brake.elapsed() < Duration::from_millis(200))
                 {
                     main_status.system_check = false;
                     BRAKE_SIGNAL.signal(BrakeSignal::DoubleBrake);
@@ -281,8 +284,8 @@ impl GlobalStatus {
         if let Some(new_brake_pressure) = BRAKE_PRESSURE.try_take() {
             self.brake_pressure.set_front_rear(new_brake_pressure);
         }
-        if let Some(_asb_check_req) = ASB_CHECK_REQ.try_take() {
-            self.asb_check_req = true;
+        if let Some(asb_check_req) = ASB_CHECK_REQ.try_take() {
+            self.asb_check_req = asb_check_req;
         }
         if let Some(new_brake_req) = BRAKE_REQ.try_take() {
             self.brake_req = new_brake_req.0;
@@ -362,7 +365,7 @@ impl MainStatus {
     pub fn reset(&mut self) {
         self.system_check = false;
         self.phase = Phase::Zero;
-        self.phase_click_counter= 0;
+        self.phase_click_counter = 0;
         self.asb_check_status = EbsStatusAsbCheck::NotRequested;
         self.brake_engaged = false;
         self.brake_consistency = false;
@@ -518,7 +521,9 @@ async fn can_reader(mut rx: CanRx<'static>) {
                         }
                     }
                     CheckAsbReq::MESSAGE_ID => {
-                        ASB_CHECK_REQ.signal(());
+                        if let Ok(msg) = CheckAsbReq::try_from(payload) {
+                            ASB_CHECK_REQ.signal(msg.req());
+                        }
                     }
                     EbsBrakeReq::MESSAGE_ID => {
                         if let Ok(msg) = EbsBrakeReq::try_from(payload) {
