@@ -135,7 +135,7 @@ async fn main(spawner: Spawner) {
             }
             Phase::Two(subphase) => match subphase {
                 PhaseTwo::FirstTankBraking => {
-                    if main_status.phase_click_counter == 100 {
+                    if main_status.phase_click_counter == 20 {
                         main_status.set_phase(Phase::Two(PhaseTwo::CheckFirstTank));
                         main_status.phase_click_counter = 0;
                     } else {
@@ -143,7 +143,10 @@ async fn main(spawner: Spawner) {
                     }
                 }
                 PhaseTwo::CheckFirstTank => {
-                    if main_status.phase_click_counter == 0 && main_status.brake_consistency {
+                    if main_status.phase_click_counter == 0
+                        && main_status.brake_consistency
+                        && main_status.tank_pressure_ok
+                    {
                         BRAKE_SIGNAL.signal(BrakeSignal::Release);
                         main_status.set_phase(Phase::Two(PhaseTwo::EmptyFirstTank));
                     } else {
@@ -168,7 +171,7 @@ async fn main(spawner: Spawner) {
                     }
                 }
                 PhaseTwo::SecondTankBraking => {
-                    if main_status.phase_click_counter == 100 {
+                    if main_status.phase_click_counter == 20 {
                         main_status.set_phase(Phase::Two(PhaseTwo::CheckSecondTank));
                         main_status.phase_click_counter = 0;
                     } else {
@@ -176,7 +179,10 @@ async fn main(spawner: Spawner) {
                     }
                 }
                 PhaseTwo::CheckSecondTank => {
-                    if main_status.phase_click_counter == 0 && main_status.brake_consistency {
+                    if main_status.phase_click_counter == 0
+                        && main_status.brake_consistency
+                        && main_status.tank_pressure_ok
+                    {
                         main_status.set_phase(Phase::Three);
                         main_status.phase_click_counter = 0;
                         main_status.asb_check_status = EbsStatusAsbCheck::Passed;
