@@ -126,16 +126,34 @@ async fn main(spawner: Spawner) {
             Phase::One => {
                 if global_status.asb_check_req == true {
                     main_status.asb_check_status = EbsStatusAsbCheck::Ongoing;
-                    main_status.set_phase(Phase::Two(PhaseTwo::FirstTankBraking));
-                    BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
+                    main_status.set_phase(Phase::Two(PhaseTwo::EmptyFirstTank));
+                    BRAKE_SIGNAL.signal(BrakeSignal::Release);
                     main_status.phase_click_counter = 0;
                 } else {
                     main_status.phase_click_counter += 1;
                 }
             }
             Phase::Two(subphase) => match subphase {
+                PhaseTwo::EmptyFirstTank => {
+                    if main_status.phase_click_counter == 300 {
+                        if check_brake_released(&global_status.brake_pressure)
+                            && main_status.tank_pressure_ok
+                        {
+                            BRAKE_SIGNAL.signal(BrakeSignal::TankOneCheck);
+                            main_status.set_phase(Phase::Two(PhaseTwo::FirstTankBraking));
+                            main_status.phase_click_counter = 0;
+                        } else {
+                            main_status.asb_check_status = EbsStatusAsbCheck::Failed;
+                            main_status.system_check = false;
+                            main_status.phase_click_counter += 1;
+                        }
+                    } else {
+                        main_status.phase_click_counter += 1;
+                    }
+                }
+
                 PhaseTwo::FirstTankBraking => {
-                    if main_status.phase_click_counter == 20 {
+                    if main_status.phase_click_counter == 50 {
                         main_status.set_phase(Phase::Two(PhaseTwo::CheckFirstTank));
                         main_status.phase_click_counter = 0;
                     } else {
@@ -148,16 +166,18 @@ async fn main(spawner: Spawner) {
                         && main_status.tank_pressure_ok
                     {
                         BRAKE_SIGNAL.signal(BrakeSignal::Release);
-                        main_status.set_phase(Phase::Two(PhaseTwo::EmptyFirstTank));
+                        main_status.set_phase(Phase::Two(PhaseTwo::EmptySecondTank));
                     } else {
                         main_status.asb_check_status = EbsStatusAsbCheck::Failed;
                         main_status.system_check = false;
                         main_status.phase_click_counter += 1;
                     }
                 }
-                PhaseTwo::EmptyFirstTank => {
-                    if main_status.phase_click_counter == 500 {
-                        if check_brake_released(&global_status.brake_pressure) {
+                PhaseTwo::EmptySecondTank => {
+                    if main_status.phase_click_counter == 300 {
+                        if check_brake_released(&global_status.brake_pressure)
+                            && main_status.tank_pressure_ok
+                        {
                             BRAKE_SIGNAL.signal(BrakeSignal::TankTwoCheck);
                             main_status.set_phase(Phase::Two(PhaseTwo::SecondTankBraking));
                             main_status.phase_click_counter = 0;
@@ -171,7 +191,7 @@ async fn main(spawner: Spawner) {
                     }
                 }
                 PhaseTwo::SecondTankBraking => {
-                    if main_status.phase_click_counter == 20 {
+                    if main_status.phase_click_counter == 50 {
                         main_status.set_phase(Phase::Two(PhaseTwo::CheckSecondTank));
                         main_status.phase_click_counter = 0;
                     } else {
@@ -208,10 +228,10 @@ async fn main(spawner: Spawner) {
                 if global_status.last_vcu_core2.elapsed() > Duration::from_millis(200)
                     || global_status.last_embedded.elapsed() > Duration::from_millis(200)
                     || (global_status.brake_req
-                        && main_status.ts_last_brake.elapsed() > Duration::from_millis(200)
+                        && main_status.ts_last_brake.elapsed() > Duration::from_millis(500)
                         && !main_status.brake_consistency)
                     || (!main_status.tank_pressure_ok
-                        && main_status.ts_last_brake.elapsed() < Duration::from_millis(200))
+                        && main_status.ts_last_brake.elapsed() > Duration::from_millis(500))
                 {
                     main_status.system_check = false;
                     BRAKE_SIGNAL.signal(BrakeSignal::DoubleBrake);
@@ -338,7 +358,7 @@ struct MainStatus {
 impl MainStatus {
     pub fn new() -> Self {
         Self {
-            system_check: false,
+            system_check: true,
             phase: Phase::Zero,
             phase_click_counter: 0,
             asb_check_status: EbsStatusAsbCheck::NotRequested,
@@ -369,7 +389,7 @@ impl MainStatus {
     }
 
     pub fn reset(&mut self) {
-        self.system_check = false;
+        self.system_check = true;
         self.phase = Phase::Zero;
         self.phase_click_counter = 0;
         self.asb_check_status = EbsStatusAsbCheck::NotRequested;
@@ -420,9 +440,10 @@ impl Phase {
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum PhaseTwo {
+    EmptyFirstTank,
     FirstTankBraking,
     CheckFirstTank,
-    EmptyFirstTank,
+    EmptySecondTank,
     SecondTankBraking,
     CheckSecondTank,
 }
