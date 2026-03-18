@@ -372,7 +372,7 @@ impl MainStatus {
     pub fn update(&mut self, tank_press: &TankPressure, brake_press: &BrakePressure) {
         self.brake_consistency = check_brake_consistency(&brake_press);
         self.brake_engaged =
-            brake_press.front > MIN_FRONT_PRESS || brake_press.rear > MIN_REAR_PRESS;
+            brake_press.front >= MIN_FRONT_PRESS || brake_press.rear >= MIN_REAR_PRESS;
         self.tank_pressure_ok = check_tank_pressure(tank_press);
     }
 
